@@ -21,11 +21,11 @@ import { useMission } from "@/lib/store";
 import type { MissionMode } from "@/lib/types";
 import AudioMixer from "./AudioMixer";
 
-const MODES: { id: MissionMode; label: string; icon: typeof Orbit }[] = [
-  { id: "asteroid", label: "ASTEROID", icon: Orbit },
-  { id: "apod", label: "DEEP SPACE", icon: Telescope },
-  { id: "cupola", label: "CUPOLA", icon: Earth },
-  { id: "solar", label: "SOLAR", icon: Sun },
+const MODES: { id: MissionMode; label: string; full: string; icon: typeof Orbit }[] = [
+  { id: "asteroid", label: "ASTEROID", full: "ASTEROID HITCHHIKER", icon: Orbit },
+  { id: "apod", label: "DEEP SPACE", full: "DEEP SPACE DRIFT", icon: Telescope },
+  { id: "cupola", label: "CUPOLA", full: "ORBITAL CUPOLA", icon: Earth },
+  { id: "solar", label: "SOLAR", full: "SOLAR TELEMETRY", icon: Sun },
 ];
 
 function Magnetic({ children }: { children: ReactNode }) {
@@ -126,6 +126,13 @@ export default function Dock() {
     >
       <div className="relative">
         <AudioMixer open={mixerOpen} />
+        <div className="mb-2 text-center font-mono text-[8px] tracking-[0.4em] text-faint">
+          MISSION PROFILE{" "}
+          <span className="text-bone/70">
+            {"// "}
+            {MODES.find((m) => m.id === mode)?.full}
+          </span>
+        </div>
         <div className="glass flex items-center gap-1 rounded-2xl px-2.5 py-2">
           {MODES.map((m) => (
             <DockButton

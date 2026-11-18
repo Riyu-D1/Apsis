@@ -23,6 +23,17 @@ export default function LaunchOverlay() {
           exit={{ opacity: 0, filter: "blur(12px)" }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.04]"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,0.8) 1px, transparent 1px)," +
+                "linear-gradient(90deg, rgba(255,255,255,0.8) 1px, transparent 1px)",
+              backgroundSize: "88px 88px",
+              maskImage:
+                "radial-gradient(ellipse at center, black 30%, transparent 75%)",
+            }}
+          />
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}

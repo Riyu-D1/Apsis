@@ -72,7 +72,9 @@ export default function ApodScene() {
 
       {img && (
         <div className="absolute bottom-24 right-4 flex max-w-xs flex-col items-end gap-2 text-right sm:bottom-28 sm:right-8">
-          <div className="glass-soft rounded-lg px-4 py-3">
+          <div className="glass-soft relative rounded-lg px-4 py-3">
+            <div className="absolute left-0 top-0 h-2 w-2 border-l border-t border-white/25" />
+            <div className="absolute bottom-0 right-0 h-2 w-2 border-b border-r border-white/25" />
             <div className="font-mono text-[10px] tracking-[0.25em] text-cyan">
               APOD ARCHIVE
             </div>

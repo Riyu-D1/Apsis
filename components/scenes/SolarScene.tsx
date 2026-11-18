@@ -63,6 +63,11 @@ void main() {
   float ripple = sin(r * 26.0 - uTime * (1.4 + uStorm * 3.2)) * 0.5 + 0.5;
   f += ripple * 0.2 * uStorm * smoothstep(R + 0.35, 0.0, r);
 
+  // corona rays — sharpen with solar intensity
+  float ang = atan(uv.y, uv.x);
+  float rays = pow(abs(sin(ang * 7.0 + f * 4.0 - uTime * 0.22)), 3.0);
+  rays *= (0.12 + uStorm * 0.35) * smoothstep(R + 0.75, R - 0.05, r) * smoothstep(0.0, R * 0.8, r);
+
   // palettes — calm: indigo/emerald · storm: amber/crimson
   vec3 indigo = vec3(0.10, 0.14, 0.55);
   vec3 emerald = vec3(0.05, 0.72, 0.48);
@@ -72,7 +77,7 @@ void main() {
   vec3 storm = mix(amber, crimson, clamp(f * 1.3, 0.0, 1.0));
   vec3 col = mix(calm, storm, uStorm);
 
-  vec3 outc = col * (core * 1.2 + halo) + col * 0.045;
+  vec3 outc = col * (core * 1.2 + halo + rays) + col * 0.045;
   outc *= 1.0 - smoothstep(0.7, 1.6, length(uv)) * 0.78;
 
   gl_FragColor = vec4(outc, 1.0);

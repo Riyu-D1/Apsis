@@ -48,17 +48,24 @@ export default function TimerDisplay() {
             width="340"
             height="340"
             viewBox="0 0 340 340"
-            className="animate-spin-slow absolute opacity-40"
+            className="animate-spin-slow absolute opacity-60"
           >
-            <circle
-              cx="170"
-              cy="170"
-              r={R}
-              fill="none"
-              stroke="rgba(255,255,255,0.07)"
-              strokeWidth="1"
-              strokeDasharray="2 10"
-            />
+            {Array.from({ length: 60 }, (_, i) => {
+              const a = (i / 60) * Math.PI * 2;
+              const major = i % 15 === 0;
+              const r1 = major ? R - 10 : R - 5;
+              return (
+                <line
+                  key={i}
+                  x1={170 + Math.cos(a) * r1}
+                  y1={170 + Math.sin(a) * r1}
+                  x2={170 + Math.cos(a) * R}
+                  y2={170 + Math.sin(a) * R}
+                  stroke={major ? "rgba(245,165,36,0.5)" : "rgba(255,255,255,0.14)"}
+                  strokeWidth={major ? 1.4 : 1}
+                />
+              );
+            })}
           </svg>
           <svg width="340" height="340" viewBox="0 0 340 340" className="absolute -rotate-90">
             <circle

@@ -201,6 +201,14 @@ export default function Hud() {
         <Telemetry />
       </div>
 
+      {/* left edge — vertical station annotation */}
+      <div className="absolute left-5 top-1/2 hidden -translate-y-1/2 -rotate-90 whitespace-nowrap font-mono text-[8px] tracking-[0.5em] text-faint lg:block">
+        FOCUS STATION — 51.5072°N · 0.1278°W
+      </div>
+      <div className="absolute right-5 top-1/2 hidden -translate-y-1/2 rotate-90 whitespace-nowrap font-mono text-[8px] tracking-[0.5em] text-faint lg:block">
+        ORBITAL CLASS — CIVILIAN GRADE
+      </div>
+
       {/* bottom-right — session meta */}
       <div className="absolute bottom-24 right-4 hidden flex-col items-end gap-1.5 font-mono text-[10px] tracking-[0.2em] text-faint sm:bottom-28 sm:right-6 sm:flex">
         <div>
