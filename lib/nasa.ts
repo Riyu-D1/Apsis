@@ -2,6 +2,7 @@ import {
   FALLBACK_APOD,
   FALLBACK_ASTEROIDS,
   FALLBACK_EPIC,
+  FALLBACK_ISS,
   FALLBACK_SOLAR,
 } from "./fallback";
 import type {
@@ -9,6 +10,7 @@ import type {
   Asteroid,
   EpicImage,
   FeedSource,
+  IssPosition,
   SolarActivity,
 } from "./types";
 
@@ -24,8 +26,11 @@ interface Result<T> {
   source: FeedSource;
 }
 
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { next: { revalidate: REVALIDATE } });
+async function fetchJson(
+  url: string,
+  revalidate: number = REVALIDATE,
+): Promise<unknown> {
+  const res = await fetch(url, { next: { revalidate } });
   if (!res.ok) throw new Error(`NASA responded ${res.status}`);
   return res.json();
 }
@@ -44,7 +49,14 @@ interface NeoEntry {
   close_approach_data: {
     relative_velocity: { kilometers_per_hour: string };
     miss_distance: { kilometers: string };
+    close_approach_date_full?: string;
   }[];
+}
+
+/** "2026-Feb-20 19:42" -> "19:42 UTC" */
+function parseApproach(full?: string): string {
+  const time = full?.split(" ").pop();
+  return time ? `${time} UTC` : "— UTC";
 }
 
 export async function getAsteroids(): Promise<Result<Asteroid[]>> {
@@ -73,6 +85,9 @@ export async function getAsteroids(): Promise<Result<Asteroid[]>> {
           parseFloat(n.close_approach_data[0].miss_distance.kilometers),
         ),
         hazardous: !!n.is_potentially_hazardous_asteroid,
+        approachUtc: parseApproach(
+          n.close_approach_data[0].close_approach_date_full,
+        ),
       }))
       .sort((a, b) => a.missDistanceKm - b.missDistanceKm)
       .slice(0, 14);
@@ -112,7 +127,7 @@ export async function getApod(): Promise<Result<ApodImage[]>> {
         date: a.date,
         title: a.title,
         explanation: a.explanation ?? "",
-        url: a.hdurl ?? a.url!,
+        url: a.url!,
         hdurl: a.hdurl ?? a.url!,
         credit: a.copyright ? a.copyright.replace(/\n/g, " ").trim() : "NASA / APOD",
       }))
@@ -150,7 +165,7 @@ export async function getEpic(): Promise<Result<EpicImage[]>> {
         id: e.identifier,
         caption: e.caption ?? "Full sunlit disc — DSCOVR EPIC",
         date: e.date,
-        url: `${EPIC_API}/archive/natural/${y}/${m}/${d}/png/${e.image}.png`,
+        url: `${EPIC_API}/archive/natural/${y}/${m}/${d}/jpg/${e.image}.jpg`,
       };
     });
 
@@ -174,19 +189,32 @@ interface GstEntry {
   allKpIndex?: { kpIndex: number }[];
 }
 
+interface CmeEntry {
+  cmeAnalyses?: { speed?: number | string }[];
+}
+
 const flareWeight = (cls?: string) =>
   cls?.startsWith("X") ? 1 : cls?.startsWith("M") ? 0.6 : cls?.startsWith("C") ? 0.25 : 0.08;
 
 export async function getSolar(): Promise<Result<SolarActivity>> {
   try {
     const start = isoDay(new Date(Date.now() - 7 * DAY_MS));
-    const [flrRaw, gstRaw] = await Promise.all([
+    const [flrRaw, gstRaw, cmeRaw] = await Promise.all([
       fetchJson(`${API}/DONKI/FLR?startDate=${start}&api_key=${KEY}`).catch(() => []),
       fetchJson(`${API}/DONKI/GST?startDate=${start}&api_key=${KEY}`).catch(() => []),
+      fetchJson(`${API}/DONKI/CME?startDate=${start}&api_key=${KEY}`).catch(() => []),
     ]);
 
     const flares = Array.isArray(flrRaw) ? (flrRaw as FlrEntry[]) : [];
     const storms = Array.isArray(gstRaw) ? (gstRaw as GstEntry[]) : [];
+    const cmes = Array.isArray(cmeRaw) ? (cmeRaw as CmeEntry[]) : [];
+
+    const wind = Math.max(
+      0,
+      ...cmes.flatMap((c) =>
+        (c.cmeAnalyses ?? []).map((a) => Number(a.speed) || 0),
+      ),
+    );
 
     const kp = Math.max(
       0,
@@ -210,10 +238,45 @@ export async function getSolar(): Promise<Result<SolarActivity>> {
       flareClass: topFlare?.classType ?? "—",
       flareCount: flares.length,
       stormCount: storms.length,
+      windSpeedKms: Math.round(wind),
+      cmeCount: cmes.length,
     };
 
     return { data, source: "live" };
   } catch {
     return { data: FALLBACK_SOLAR, source: "cache" };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* ISS — live position (wheretheiss.at, free + no key)                  */
+/* ------------------------------------------------------------------ */
+
+interface IssEntry {
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  velocity: number;
+  timestamp: number;
+}
+
+export async function getIss(): Promise<Result<IssPosition>> {
+  try {
+    const j = (await fetchJson(
+      "https://api.wheretheiss.at/v1/satellites/25544",
+      20,
+    )) as IssEntry;
+    return {
+      data: {
+        lat: +j.latitude.toFixed(3),
+        lon: +j.longitude.toFixed(3),
+        altKm: Math.round(j.altitude),
+        velKmh: Math.round(j.velocity),
+        ts: j.timestamp,
+      },
+      source: "live",
+    };
+  } catch {
+    return { data: FALLBACK_ISS, source: "cache" };
   }
 }

@@ -2,6 +2,7 @@ import type {
   ApodImage,
   Asteroid,
   EpicImage,
+  IssPosition,
   SolarActivity,
 } from "./types";
 
@@ -11,14 +12,14 @@ import type {
  */
 
 export const FALLBACK_ASTEROIDS: Asteroid[] = [
-  { id: "neo-2026xr4", name: "2026 XR4", diameterM: 140, velocityKmh: 48210, missDistanceKm: 1420900, hazardous: false },
-  { id: "neo-2026kd", name: "2026 KD", diameterM: 212, velocityKmh: 52330, missDistanceKm: 1947300, hazardous: false },
-  { id: "neo-2025qt9", name: "2025 QT9", diameterM: 78, velocityKmh: 39450, missDistanceKm: 742300, hazardous: false },
-  { id: "neo-2023dw", name: "2023 DW", diameterM: 49, velocityKmh: 88470, missDistanceKm: 2074300, hazardous: false },
-  { id: "neo-2026vh2", name: "2026 VH2", diameterM: 310, velocityKmh: 61780, missDistanceKm: 3860400, hazardous: false },
-  { id: "neo-2024bx11", name: "2024 BX11", diameterM: 540, velocityKmh: 71260, missDistanceKm: 6115800, hazardous: true },
-  { id: "neo-2025jv1", name: "2025 JV1", diameterM: 36, velocityKmh: 28940, missDistanceKm: 415800, hazardous: false },
-  { id: "neo-2026aa3", name: "2026 AA3", diameterM: 890, velocityKmh: 44120, missDistanceKm: 7289600, hazardous: true },
+  { id: "neo-2026xr4", name: "2026 XR4", diameterM: 140, velocityKmh: 48210, missDistanceKm: 1420900, hazardous: false, approachUtc: "13:42 UTC" },
+  { id: "neo-2026kd", name: "2026 KD", diameterM: 212, velocityKmh: 52330, missDistanceKm: 1947300, hazardous: false, approachUtc: "18:07 UTC" },
+  { id: "neo-2025qt9", name: "2025 QT9", diameterM: 78, velocityKmh: 39450, missDistanceKm: 742300, hazardous: false, approachUtc: "09:15 UTC" },
+  { id: "neo-2023dw", name: "2023 DW", diameterM: 49, velocityKmh: 88470, missDistanceKm: 2074300, hazardous: false, approachUtc: "21:33 UTC" },
+  { id: "neo-2026vh2", name: "2026 VH2", diameterM: 310, velocityKmh: 61780, missDistanceKm: 3860400, hazardous: false, approachUtc: "16:48 UTC" },
+  { id: "neo-2024bx11", name: "2024 BX11", diameterM: 540, velocityKmh: 71260, missDistanceKm: 6115800, hazardous: true, approachUtc: "05:21 UTC" },
+  { id: "neo-2025jv1", name: "2025 JV1", diameterM: 36, velocityKmh: 28940, missDistanceKm: 415800, hazardous: false, approachUtc: "11:58 UTC" },
+  { id: "neo-2026aa3", name: "2026 AA3", diameterM: 890, velocityKmh: 44120, missDistanceKm: 7289600, hazardous: true, approachUtc: "23:04 UTC" },
 ];
 
 const NASA_IMG = (id: string) =>
@@ -136,4 +137,14 @@ export const FALLBACK_SOLAR: SolarActivity = {
   flareClass: "M1.2",
   flareCount: 3,
   stormCount: 1,
+  windSpeedKms: 486,
+  cmeCount: 2,
+};
+
+export const FALLBACK_ISS: IssPosition = {
+  lat: 12.4,
+  lon: -38.6,
+  altKm: 421,
+  velKmh: 27580,
+  ts: 0,
 };

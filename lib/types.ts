@@ -7,6 +7,7 @@ export interface Asteroid {
   velocityKmh: number;
   missDistanceKm: number;
   hazardous: boolean;
+  approachUtc: string;
 }
 
 export interface ApodImage {
@@ -32,6 +33,16 @@ export interface SolarActivity {
   flareClass: string;
   flareCount: number;
   stormCount: number;
+  windSpeedKms: number; // fastest CME analysis speed, 0 = quiet flow
+  cmeCount: number;
+}
+
+export interface IssPosition {
+  lat: number;
+  lon: number;
+  altKm: number;
+  velKmh: number;
+  ts: number;
 }
 
 export interface Task {
@@ -47,10 +58,12 @@ export interface NasaBundle {
   apod: ApodImage[];
   epic: EpicImage[];
   solar: SolarActivity;
+  iss: IssPosition;
   sources: {
     neows: FeedSource;
     apod: FeedSource;
     epic: FeedSource;
     donki: FeedSource;
+    iss: FeedSource;
   };
 }

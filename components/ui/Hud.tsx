@@ -107,23 +107,26 @@ function Telemetry() {
           ["VELOCITY", `${fmtInt(asteroid.velocityKmh)} KM/H`],
           ["MISS DIST", `${fmtInt(asteroid.missDistanceKm)} KM`],
           ["DIAMETER", `${fmtInt(asteroid.diameterM)} M`],
+          ["APPROACH", asteroid.approachUtc],
           ["CLASS", asteroid.hazardous ? "HAZARDOUS" : "SAFE", asteroid.hazardous ? "alert" : "cyan"],
         ]
       : mode === "apod"
         ? [
             ["FRAME", `${String((apodIndex % nasa.apod.length) + 1).padStart(2, "0")} / ${String(nasa.apod.length).padStart(2, "0")}`],
             ["SOURCE", "APOD // GSFC", "cyan"],
-            ["SIGNAL", `${fmtInt(2400 + Math.round(Math.abs(Math.sin(apodIndex)) * 600))} MM`],
+            ["DATE", nasa.apod[apodIndex % nasa.apod.length]?.date ?? "—"],
           ]
         : mode === "cupola"
           ? [
-              ["ALTITUDE", "408 KM"],
-              ["VELOCITY", "27,600 KM/H"],
-              ["FRAMES", `${nasa.epic.length} EPIC`, "cyan"],
+              ["LAT", `${nasa.iss.lat >= 0 ? "+" : ""}${nasa.iss.lat.toFixed(2)}°`],
+              ["LON", `${nasa.iss.lon >= 0 ? "+" : ""}${nasa.iss.lon.toFixed(2)}°`],
+              ["ALTITUDE", `${fmtInt(nasa.iss.altKm)} KM`],
+              ["VELOCITY", `${fmtInt(nasa.iss.velKmh)} KM/H`, nasa.sources.iss === "live" ? "cyan" : undefined],
             ]
           : [
               ["KP INDEX", nasa.solar.kpIndex.toFixed(1)],
               ["FLARE CLASS", nasa.solar.flareClass, nasa.solar.level === "STORM" ? "alert" : "cyan"],
+              ["SOLAR WIND", nasa.solar.windSpeedKms > 0 ? `${fmtInt(nasa.solar.windSpeedKms)} KM/S` : "QUIET"],
               ["ACTIVITY", nasa.solar.level, nasa.solar.level === "STORM" ? "alert" : undefined],
             ];
 

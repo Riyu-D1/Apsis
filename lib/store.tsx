@@ -15,6 +15,7 @@ import {
   FALLBACK_APOD,
   FALLBACK_ASTEROIDS,
   FALLBACK_EPIC,
+  FALLBACK_ISS,
   FALLBACK_SOLAR,
 } from "./fallback";
 import type { Asteroid, MissionMode, NasaBundle, Task } from "./types";
@@ -38,7 +39,14 @@ const INITIAL_NASA: NasaBundle = {
   apod: FALLBACK_APOD,
   epic: FALLBACK_EPIC,
   solar: FALLBACK_SOLAR,
-  sources: { neows: "cache", apod: "cache", epic: "cache", donki: "cache" },
+  iss: FALLBACK_ISS,
+  sources: {
+    neows: "cache",
+    apod: "cache",
+    epic: "cache",
+    donki: "cache",
+    iss: "cache",
+  },
 };
 
 interface SessionRec {
@@ -61,6 +69,7 @@ interface MissionCtx {
   asteroid: Asteroid;
   apodIndex: number;
   nextApod: () => void;
+  goApod: (i: number) => void;
   reportApodError: (url: string) => void;
   apodAllFaulted: boolean;
 
@@ -183,11 +192,13 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     ).then(([neo, apod, epic, donki]) => {
       if (!alive) return;
       setNasa((prev) => ({
+        ...prev,
         asteroids: neo?.data?.length ? neo.data : prev.asteroids,
         apod: apod?.data?.length ? apod.data : prev.apod,
         epic: epic?.data?.length ? epic.data : prev.epic,
         solar: donki?.data ?? prev.solar,
         sources: {
+          ...prev.sources,
           neows: neo?.source ?? prev.sources.neows,
           apod: apod?.source ?? prev.sources.apod,
           epic: epic?.source ?? prev.sources.epic,
@@ -198,6 +209,29 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     });
     return () => {
       alive = false;
+    };
+  }, []);
+
+  /* ------- ISS live position (polls every 20s) ------- */
+  useEffect(() => {
+    let alive = true;
+    const poll = () =>
+      fetch("/api/iss")
+        .then((r) => r.json())
+        .then((res) => {
+          if (!alive || !res?.data) return;
+          setNasa((prev) => ({
+            ...prev,
+            iss: res.data,
+            sources: { ...prev.sources, iss: res.source ?? prev.sources.iss },
+          }));
+        })
+        .catch(() => null);
+    poll();
+    const iv = setInterval(poll, 20_000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
     };
   }, []);
 
@@ -342,6 +376,10 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     setApodIndex((i) => i + 1);
   }, [click]);
 
+  const goApod = useCallback((i: number) => {
+    setApodIndex(i);
+  }, []);
+
   const reportApodError = useCallback(
     (url: string) => {
       setApodFaults((f) => {
@@ -377,6 +415,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     asteroid,
     apodIndex,
     nextApod,
+    goApod,
     reportApodError,
     apodAllFaulted,
     durationSec,
