@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Plus, Trash2, X } from "lucide-react";
 import { useMission } from "@/lib/store";
+import SpotlightCard from "@/components/reactbits/SpotlightCard";
 
 export default function FlightPlan() {
   const { planOpen, setPlanOpen, tasks, addTask, toggleTask, removeTask } =
@@ -19,8 +20,23 @@ export default function FlightPlan() {
           animate={{ x: 0 }}
           exit={{ x: "110%" }}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="glass absolute bottom-0 right-0 top-0 z-40 flex w-full max-w-[360px] flex-col border-l border-white/10"
+          className="absolute bottom-0 right-0 top-0 z-40 w-full max-w-[360px]"
         >
+          <SpotlightCard
+            className="flex h-full w-full flex-col border-l border-white/10"
+            spotlightColor="rgba(103, 232, 249, 0.1)"
+            theme="dark"
+            style={
+              {
+                padding: 0,
+                borderRadius: 0,
+                backdropFilter: "blur(24px) saturate(140%)",
+                WebkitBackdropFilter: "blur(24px) saturate(140%)",
+                "--spotlight-card-surface": "rgba(10, 10, 13, 0.62)",
+                "--spotlight-card-shadow": "none",
+              } as CSSProperties
+            }
+          >
           <div className="flex items-center justify-between border-b border-white/[0.07] px-6 py-5">
             <div>
               <div className="font-mono text-[9px] tracking-[0.4em] text-faint">
@@ -124,6 +140,7 @@ export default function FlightPlan() {
               </button>
             </div>
           </form>
+          </SpotlightCard>
         </motion.aside>
       )}
     </AnimatePresence>

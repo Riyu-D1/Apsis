@@ -3,6 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Rocket } from "lucide-react";
 import { useMission } from "@/lib/store";
+import MagnetLines from "@/components/reactbits/MagnetLines";
+import StarBorder from "@/components/reactbits/StarBorder";
+import ClickSpark from "@/components/reactbits/ClickSpark";
 import ScrambleText from "./ScrambleText";
 
 const CHECKS = [
@@ -23,6 +26,20 @@ export default function LaunchOverlay() {
           exit={{ opacity: 0, filter: "blur(12px)" }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         >
+          {/* interactive line-field backdrop */}
+          <div className="pointer-events-none absolute inset-0 opacity-60">
+            <MagnetLines
+              spacing={36}
+              lineColor="rgba(255,255,255,0.05)"
+              accentColor="rgba(245,165,36,0.35)"
+              lineWidth={1}
+              lineHeight={16}
+              baseAngle={-10}
+              radius={260}
+              fade={0.8}
+              className="h-full w-full"
+            />
+          </div>
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.04]"
             style={{
@@ -34,11 +51,12 @@ export default function LaunchOverlay() {
                 "radial-gradient(ellipse at center, black 30%, transparent 75%)",
             }}
           />
+
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.1 }}
-            className="flex flex-col items-center px-6 text-center"
+            className="relative flex flex-col items-center px-6 text-center"
           >
             <div className="font-mono text-[10px] tracking-[0.5em] text-faint">
               COGNITION LABS // DEEP WORK TERMINAL
@@ -73,16 +91,42 @@ export default function LaunchOverlay() {
               ))}
             </div>
 
-            <motion.button
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 2 }}
-              onClick={launch}
-              className="group mt-12 flex items-center gap-3 rounded-full border border-bone/30 px-10 py-4 font-mono text-[11px] tracking-[0.4em] text-bone transition-all duration-300 hover:border-amber hover:bg-amber/10 hover:text-amber"
+              className="mt-12"
             >
-              <Rocket className="h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5" strokeWidth={1.5} />
-              LAUNCH MISSION
-            </motion.button>
+              <ClickSpark
+                sparkColor="#f5a524"
+                sparkCount={12}
+                sparkRadius={28}
+                sparkSize={9}
+                duration={500}
+              >
+                <StarBorder
+                  as="button"
+                  onClick={launch}
+                  color="#f5a524"
+                  trailColor="rgba(255,255,255,0.18)"
+                  duration={5}
+                  thickness={1}
+                  radius={999}
+                  stars={2}
+                  glow={0.6}
+                  theme="dark"
+                  className="group font-mono text-[11px] tracking-[0.4em]"
+                >
+                  <span className="flex items-center gap-3 px-6 py-1.5">
+                    <Rocket
+                      className="h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5"
+                      strokeWidth={1.5}
+                    />
+                    LAUNCH MISSION
+                  </span>
+                </StarBorder>
+              </ClickSpark>
+            </motion.div>
 
             <motion.div
               initial={{ opacity: 0 }}

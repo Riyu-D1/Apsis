@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import DecryptedText from "@/components/reactbits/DecryptedText";
 
-const CHARS = "!<>-_\\/[]{}=+*^?#@$%&";
-
+/**
+ * Telemetry decrypt — wraps React Bits DecryptedText. `key={text}` remounts
+ * on change so every new value re-runs the scramble reveal.
+ */
 export default function ScrambleText({
   text,
   className,
@@ -13,38 +15,19 @@ export default function ScrambleText({
   className?: string;
   duration?: number;
 }) {
-  const [display, setDisplay] = useState(text);
-
-  useEffect(() => {
-    let frame = 0;
-    const total = Math.max(10, Math.round(duration / 28));
-    const iv = setInterval(() => {
-      frame++;
-      const resolved = Math.floor((frame / total) * text.length);
-      if (frame >= total) {
-        setDisplay(text);
-        clearInterval(iv);
-        return;
-      }
-      setDisplay(
-        text
-          .split("")
-          .map((ch, i) =>
-            ch === " "
-              ? " "
-              : i < resolved
-                ? ch
-                : CHARS[Math.floor(Math.random() * CHARS.length)],
-          )
-          .join(""),
-      );
-    }, 28);
-    return () => clearInterval(iv);
-  }, [text, duration]);
-
   return (
-    <span className={className} suppressHydrationWarning>
-      {display}
-    </span>
+    <DecryptedText
+      key={text}
+      text={text}
+      animateOn="view"
+      sequential
+      revealDirection="start"
+      speed={Math.max(18, Math.round(duration / Math.max(text.length, 1)))}
+      maxIterations={8}
+      useOriginalCharsOnly={false}
+      characters="!<>-_\/[]{}=+*^?#@$%"
+      className={className}
+      encryptedClassName="opacity-50"
+    />
   );
 }

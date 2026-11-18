@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Pause, Play, RotateCcw } from "lucide-react";
 import { useMission } from "@/lib/store";
 import { fmtClock } from "@/lib/format";
+import ClickSpark from "@/components/reactbits/ClickSpark";
 
 const PRESETS = [
   { label: "POMODORO", sec: 25 * 60 },
@@ -171,20 +172,28 @@ export default function TimerDisplay() {
           )}
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={running ? pauseTimer : startTimer}
-              className="glass flex items-center gap-2 rounded-full px-7 py-2.5 font-mono text-[11px] tracking-[0.3em] text-bone transition-colors hover:border-white/25"
+            <ClickSpark
+              sparkColor="#f5a524"
+              sparkCount={8}
+              sparkRadius={20}
+              sparkSize={7}
+              duration={400}
             >
-              {running ? (
-                <>
-                  <Pause className="h-3.5 w-3.5" strokeWidth={1.5} /> HOLD
-                </>
-              ) : (
-                <>
-                  <Play className="h-3.5 w-3.5" strokeWidth={1.5} /> IGNITE
-                </>
-              )}
-            </button>
+              <button
+                onClick={running ? pauseTimer : startTimer}
+                className="glass flex items-center gap-2 rounded-full px-7 py-2.5 font-mono text-[11px] tracking-[0.3em] text-bone transition-colors hover:border-white/25"
+              >
+                {running ? (
+                  <>
+                    <Pause className="h-3.5 w-3.5" strokeWidth={1.5} /> HOLD
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3.5 w-3.5" strokeWidth={1.5} /> IGNITE
+                  </>
+                )}
+              </button>
+            </ClickSpark>
             <button
               onClick={resetTimer}
               className="glass-soft rounded-full p-2.5 text-dim transition-colors hover:text-bone"

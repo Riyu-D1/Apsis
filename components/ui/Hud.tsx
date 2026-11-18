@@ -6,6 +6,7 @@ import { ChevronDown, Radio, TriangleAlert } from "lucide-react";
 import { useMission } from "@/lib/store";
 import { fmtInt } from "@/lib/format";
 import ScrambleText from "./ScrambleText";
+import ShinyText from "@/components/reactbits/ShinyText";
 
 function UtcClock() {
   const [now, setNow] = useState("");
@@ -177,7 +178,11 @@ export default function Hud() {
             COGNITION LABS
           </div>
           <div className="mt-0.5 font-display text-base font-semibold tracking-[0.22em] text-bone">
-            ORBITAL<span className="text-amber">®</span>
+            <ShinyText
+              text="ORBITAL®"
+              speed={5}
+              className="font-display font-semibold tracking-[0.22em]"
+            />
             <span className="ml-2 font-light text-dim">{"// FOCUS"}</span>
           </div>
         </div>

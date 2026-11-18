@@ -70,10 +70,10 @@ function Earth() {
     if (g.current) g.current.rotation.y += dt * 0.02;
   });
   return (
-    <group position={[8.6, -3.4, -10.5]}>
+    <group position={[5.9, -2.1, -8.5]}>
       <group ref={g}>
         <mesh>
-          <sphereGeometry args={[1.7, 48, 48]} />
+          <sphereGeometry args={[2.1, 48, 48]} />
           <meshStandardMaterial
             color="#16307a"
             emissive="#0b1f5e"
@@ -83,17 +83,17 @@ function Earth() {
         </mesh>
         {/* cloud sheen */}
         <mesh scale={1.015}>
-          <sphereGeometry args={[1.7, 48, 48]} />
+          <sphereGeometry args={[2.1, 48, 48]} />
           <meshStandardMaterial
             color="#9fc4ff"
             transparent
-            opacity={0.16}
+            opacity={0.18}
             roughness={1}
           />
         </mesh>
         {/* atmosphere */}
         <mesh scale={1.18}>
-          <sphereGeometry args={[1.7, 48, 48]} />
+          <sphereGeometry args={[2.1, 48, 48]} />
           <shaderMaterial
             vertexShader={ATMO_VERT}
             fragmentShader={ATMO_FRAG}
@@ -121,7 +121,7 @@ const PATH_POINTS = [
 ];
 
 function Trajectory() {
-  const marker = useRef<THREE.Mesh>(null);
+  const marker = useRef<THREE.Group>(null);
   const { curve, line, ticks } = useMemo(() => {
     const curve = new THREE.CatmullRomCurve3(PATH_POINTS);
     const pts = curve.getPoints(220);
@@ -131,7 +131,7 @@ function Trajectory() {
       new THREE.LineDashedMaterial({
         color: "#f4f4f6",
         transparent: true,
-        opacity: 0.22,
+        opacity: 0.38,
         dashSize: 0.28,
         gapSize: 0.18,
       }),
@@ -146,6 +146,8 @@ function Trajectory() {
     if (!marker.current) return;
     const t = (s.clock.elapsedTime * 0.018) % 1;
     curve.getPointAt(t, marker.current.position);
+    const pulse = 1 + Math.sin(s.clock.elapsedTime * 4) * 0.25;
+    marker.current.scale.setScalar(pulse);
   });
 
   return (
@@ -153,18 +155,24 @@ function Trajectory() {
       <primitive object={line} />
       <points geometry={ticks}>
         <pointsMaterial
-          size={0.06}
+          size={0.09}
           color="#f4f4f6"
           transparent
-          opacity={0.35}
+          opacity={0.5}
           sizeAttenuation
           depthWrite={false}
         />
       </points>
-      <mesh ref={marker}>
-        <sphereGeometry args={[0.045, 16, 16]} />
-        <meshBasicMaterial color="#f5a524" />
-      </mesh>
+      <group ref={marker}>
+        <mesh>
+          <sphereGeometry args={[0.05, 16, 16]} />
+          <meshBasicMaterial color="#f5a524" />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[0.13, 16, 16]} />
+          <meshBasicMaterial color="#f5a524" transparent opacity={0.18} />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -187,9 +195,9 @@ function Reticle() {
     const circ = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints(circPts),
       new THREE.LineDashedMaterial({
-        color: "#f4f4f6",
+        color: "#67e8f9",
         transparent: true,
-        opacity: 0.16,
+        opacity: 0.3,
         dashSize: 0.16,
         gapSize: 0.12,
       }),
@@ -223,7 +231,7 @@ function Reticle() {
       new THREE.LineBasicMaterial({
         color: "#f4f4f6",
         transparent: true,
-        opacity: 0.38,
+        opacity: 0.55,
       }),
     );
     group.add(brackets);
@@ -299,14 +307,14 @@ function PolarDeck() {
     );
     const mat = g.material as THREE.LineBasicMaterial;
     mat.transparent = true;
-    mat.opacity = 0.1;
+    mat.opacity = 0.16;
     return g;
   }, []);
   useFrame((_, dt) => {
-    if (ref.current) ref.current.rotation.y += dt * 0.018;
+    if (ref.current) ref.current.rotation.y += dt * 0.02;
   });
   return (
-    <group position={[0, -4.1, 0]} rotation={[0, 0, 0]}>
+    <group position={[0, -2.6, -2.2]} rotation={[0.85, 0, 0]}>
       <primitive ref={ref} object={grid} />
     </group>
   );

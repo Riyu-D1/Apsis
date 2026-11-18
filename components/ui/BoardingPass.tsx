@@ -6,6 +6,7 @@ import { toPng } from "html-to-image";
 import { Check, Download, X } from "lucide-react";
 import { useMission } from "@/lib/store";
 import { fmtInt, missionCode, mulberry32, seedFromString } from "@/lib/format";
+import CountUp from "@/components/reactbits/CountUp";
 
 const MODE_NAMES = {
   asteroid: "ASTEROID HITCHHIKER",
@@ -190,7 +191,14 @@ export default function BoardingPass() {
                 <div className="mt-4 space-y-1.5 text-[10px] leading-relaxed tracking-wider">
                   <div className="text-dim">
                     YOU TRAVELLED{" "}
-                    <span className="text-bone">{fmtInt(travelled)} KM</span>{" "}
+                    <CountUp
+                      to={travelled}
+                      separator=","
+                      duration={1.6}
+                      trigger="load"
+                      suffix=" KM"
+                      className="text-bone"
+                    />{" "}
                     ALONGSIDE{" "}
                     <span className="text-amber">{asteroid.name}</span>
                   </div>
