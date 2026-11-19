@@ -126,8 +126,136 @@ function useRockGeometry(seedKey: string) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Earth — fresnel atmosphere, the body being missed                    */
+/* Earth — procedural shader planet: continents, ocean glint, ice caps, */
+/* night-side city lights, drifting clouds, fresnel atmosphere          */
 /* ------------------------------------------------------------------ */
+
+const EARTH_VERT = /* glsl */ `
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+varying vec3 vLocal;
+void main() {
+  vLocal = normalize(position);
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWorldPos = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}
+`;
+
+const NOISE_GLSL = /* glsl */ `
+float hash(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float vnoise(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash(i + vec3(0.0, 0.0, 0.0)), hash(i + vec3(1.0, 0.0, 0.0)), f.x),
+        mix(hash(i + vec3(0.0, 1.0, 0.0)), hash(i + vec3(1.0, 1.0, 0.0)), f.x),
+        f.y),
+    mix(mix(hash(i + vec3(0.0, 0.0, 1.0)), hash(i + vec3(1.0, 0.0, 1.0)), f.x),
+        mix(hash(i + vec3(0.0, 1.0, 1.0)), hash(i + vec3(1.0, 1.0, 1.0)), f.x),
+        f.y),
+    f.z);
+}
+float fbm(vec3 p) {
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 5; i++) {
+    v += a * vnoise(p);
+    p = p * 2.03 + vec3(13.7);
+    a *= 0.5;
+  }
+  return v;
+}
+`;
+
+const EARTH_FRAG = /* glsl */ `
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+varying vec3 vLocal;
+uniform vec3 uSunDir;
+${NOISE_GLSL}
+void main() {
+  vec3 N = normalize(vNormal);
+  vec3 V = normalize(cameraPosition - vWorldPos);
+  vec3 p = vLocal;
+
+  float cont = fbm(p * 2.7 + vec3(7.31));
+  float land = smoothstep(0.5, 0.545, cont);
+  float elev = fbm(p * 8.0 + vec3(2.9));
+
+  float lat = abs(p.y);
+  vec3 landCol = mix(
+    vec3(0.09, 0.24, 0.08),
+    vec3(0.45, 0.33, 0.16),
+    smoothstep(0.18, 0.46, lat),
+  );
+  landCol = mix(landCol, vec3(0.38, 0.3, 0.22), smoothstep(0.55, 0.8, elev));
+  landCol *= 0.7 + 0.6 * elev;
+
+  vec3 ocean = mix(
+    vec3(0.008, 0.05, 0.19),
+    vec3(0.02, 0.14, 0.35),
+    smoothstep(0.42, 0.52, cont),
+  );
+  vec3 col = mix(ocean, landCol, land);
+
+  float ice = smoothstep(0.62, 0.78, lat + (fbm(p * 6.0) - 0.5) * 0.22);
+  col = mix(col, vec3(0.82, 0.88, 0.95), ice);
+
+  float sunAmt = dot(N, uSunDir);
+  float day = smoothstep(-0.06, 0.14, sunAmt);
+  float direct = max(sunAmt, 0.0);
+
+  vec3 H = normalize(uSunDir + V);
+  float spec =
+    pow(max(dot(N, H), 0.0), 48.0) * (1.0 - land) * (1.0 - ice) * direct;
+
+  vec3 lit = col * (0.03 + direct * 1.15 + day * 0.06);
+  lit += vec3(0.45, 0.6, 0.9) * spec * 1.1;
+
+  float term = exp(-abs(sunAmt) * 9.0);
+  lit += vec3(0.85, 0.38, 0.12) * term * 0.16;
+
+  float night = 1.0 - day;
+  float pop = smoothstep(0.55, 0.75, fbm(p * 9.0 + vec3(4.2)));
+  float dots = smoothstep(0.72, 0.92, vnoise(p * 90.0));
+  lit += vec3(1.0, 0.72, 0.38) * night * land * (1.0 - ice) * pop * dots * 2.2;
+
+  float fres = pow(1.0 - max(dot(N, V), 0.0), 2.8);
+  lit += vec3(0.32, 0.58, 1.0) * fres * (0.22 + day * 0.95);
+
+  gl_FragColor = vec4(lit, 1.0);
+}
+`;
+
+const CLOUD_FRAG = /* glsl */ `
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+varying vec3 vLocal;
+uniform vec3 uSunDir;
+uniform float uTime;
+${NOISE_GLSL}
+void main() {
+  vec3 N = normalize(vNormal);
+  vec3 p = vLocal + vec3(uTime * 0.006, 0.0, uTime * 0.002);
+  float c = fbm(p * 3.6 + vec3(11.3));
+  c = c * 0.7 + 0.3 * fbm(p * 9.0);
+  float alpha = smoothstep(0.5, 0.72, c);
+  float sunAmt = dot(N, uSunDir);
+  float day = smoothstep(-0.12, 0.2, sunAmt);
+  float term = exp(-abs(sunAmt) * 9.0);
+  vec3 col =
+    vec3(0.92, 0.95, 1.0) * (0.05 + max(sunAmt, 0.0) * 1.2 + day * 0.08);
+  col += vec3(0.8, 0.35, 0.12) * term * 0.25;
+  gl_FragColor = vec4(col, alpha * (0.06 + day * 0.94) * 0.9);
+}
+`;
 
 const ATMO_VERT = /* glsl */ `
 varying vec3 vNormal;
@@ -143,38 +271,49 @@ const ATMO_FRAG = /* glsl */ `
 varying vec3 vNormal;
 varying vec3 vView;
 void main() {
-  float f = pow(0.68 - dot(vNormal, vView), 3.2);
-  gl_FragColor = vec4(vec3(0.32, 0.55, 1.0) * f, f);
+  float f = pow(max(0.0, 0.72 - dot(vNormal, vView)), 4.0);
+  gl_FragColor = vec4(vec3(0.3, 0.55, 1.0) * f * 1.4, f);
 }
 `;
 
+const SUN_DIR = new THREE.Vector3(5, 4, 3).normalize();
+
 function Earth({ position }: { position: THREE.Vector3 }) {
   const g = useRef<THREE.Group>(null);
+  const surfMat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: { uSunDir: { value: SUN_DIR } },
+        vertexShader: EARTH_VERT,
+        fragmentShader: EARTH_FRAG,
+      }),
+    [],
+  );
+  const cloudMat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: { uSunDir: { value: SUN_DIR }, uTime: { value: 0 } },
+        vertexShader: EARTH_VERT,
+        fragmentShader: CLOUD_FRAG,
+        transparent: true,
+        depthWrite: false,
+      }),
+    [],
+  );
   useFrame((_, dt) => {
-    if (g.current) g.current.rotation.y += dt * 0.02;
+    if (g.current) g.current.rotation.y += dt * 0.028;
+    cloudMat.uniforms.uTime.value += dt;
   });
   return (
     <group position={position}>
       <group ref={g}>
-        <mesh>
-          <sphereGeometry args={[EARTH_R, 48, 48]} />
-          <meshStandardMaterial
-            color="#16307a"
-            emissive="#0b1f5e"
-            emissiveIntensity={0.9}
-            roughness={0.55}
-          />
+        <mesh material={surfMat}>
+          <sphereGeometry args={[EARTH_R, 64, 64]} />
         </mesh>
-        <mesh scale={1.015}>
+        <mesh scale={1.018} material={cloudMat}>
           <sphereGeometry args={[EARTH_R, 48, 48]} />
-          <meshStandardMaterial
-            color="#9fc4ff"
-            transparent
-            opacity={0.18}
-            roughness={1}
-          />
         </mesh>
-        <mesh scale={1.18}>
+        <mesh scale={1.22}>
           <sphereGeometry args={[EARTH_R, 48, 48]} />
           <shaderMaterial
             vertexShader={ATMO_VERT}
@@ -186,6 +325,15 @@ function Earth({ position }: { position: THREE.Vector3 }) {
           />
         </mesh>
       </group>
+      <Html
+        position={[0, -EARTH_R - 0.55, 0]}
+        zIndexRange={[10, 0]}
+        style={{ pointerEvents: "none" }}
+      >
+        <div className="w-max -translate-x-1/2 font-mono text-[8px] tracking-[0.3em] text-cyan/70">
+          EARTH
+        </div>
+      </Html>
     </group>
   );
 }
