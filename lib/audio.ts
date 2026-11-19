@@ -226,6 +226,25 @@ class MissionAudio {
     osc.stop(t + 0.1);
   }
 
+  /** Short sonar blip — incoming crew radio call. */
+  ping() {
+    const ctx = this.ctx;
+    if (!ctx || !this.master) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(940, t);
+    osc.frequency.exponentialRampToValueAtTime(620, t + 0.14);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.14, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+    osc.connect(g);
+    g.connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.36);
+  }
+
   /** Soft three-tone bell on session completion. */
   chime() {
     const ctx = this.ctx;

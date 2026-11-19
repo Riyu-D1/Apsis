@@ -33,13 +33,29 @@ minimalism on an ISS Cupola flight deck.
 
 ## NASA API layer
 
-`/api/nasa/{neows,apod,epic,donki}` — server-side routes with
+`/api/nasa/{neows,apod,donki}` — server-side routes with
 `revalidate: 3600` caching and realistic fallback archives, so the app works
-instantly offline and never breaks on rate limits.
+instantly offline and never breaks on rate limits. `/api/iss` polls the
+live ISS position every 20s.
 
 ```bash
 NASA_API_KEY=your_key   # optional — falls back to DEMO_KEY
 ```
+
+## Crew link (optional)
+
+Presence-as-telemetry over Supabase Realtime — crewmates appear as tracked
+contacts on the scope, with radio pings and an optional CAPCOM clock sync.
+No accounts: rooms are 6-char codes, identities are generated callsigns.
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable key>
+```
+
+Without these vars the crew dock item shows `LINK OFFLINE` and everything
+else works standalone. Channels are public (`private: false`) so no
+realtime RLS policies are required.
 
 ## Run
 
@@ -50,4 +66,4 @@ npm run build   # production build (clean: 0 errors / 0 warnings)
 npm run lint    # eslint — clean
 ```
 
-Data: NASA Open APIs (NeoWs · APOD · EPIC · DONKI). Not affiliated with NASA.
+Data: NASA Open APIs (NeoWs · APOD · DONKI), wheretheiss.at. Not affiliated with NASA.

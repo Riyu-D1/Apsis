@@ -813,6 +813,31 @@ function TrajectoryPlot({
 }) {
   const dot = useRef<SVGCircleElement>(null);
   const rangeEl = useRef<HTMLSpanElement>(null);
+  const { crew, selfId } = useMission();
+  const blips = useRef(new Map<string, SVGGElement>());
+
+  /* crewmates on the scope — each gets a seeded orbit ring around Earth;
+     status colors: cyan focus, amber rest, dim hold, white zen */
+  const others = useMemo(
+    () => Object.entries(crew).filter(([id]) => id !== selfId),
+    [crew, selfId],
+  );
+  const blipParams = useMemo(() => {
+    const m = new Map<
+      string,
+      { r: number; a0: number; dir: number; speed: number }
+    >();
+    others.forEach(([id], i) => {
+      const rand = mulberry32(seedFromString(id));
+      m.set(id, {
+        r: 16 + ((i + Math.floor(rand() * 3)) % 3) * 8,
+        a0: rand() * Math.PI * 2,
+        dir: rand() < 0.5 ? 1 : -1,
+        speed: 0.15 + rand() * 0.2,
+      });
+    });
+    return m;
+  }, [others]);
 
   // project the orbit onto the XZ plane (top-down), fit to panel
   const W = 208;
@@ -848,7 +873,8 @@ function TrajectoryPlot({
     return { d, earth: map(spec.earth), ca: map(spec.pts[spec.perigeeIdx]), map };
   }, [spec]);
 
-  /* sync the 2-D marker to the 3-D body (plain RAF — outside the Canvas) */
+  /* sync the 2-D marker + crew blips to the 3-D body (plain RAF —
+     outside the Canvas, so zero React re-renders per frame) */
   useEffect(() => {
     let raf = 0;
     const tick = () => {
@@ -857,11 +883,20 @@ function TrajectoryPlot({
       dot.current?.setAttribute("cy", y.toFixed(1));
       if (rangeEl.current)
         rangeEl.current.textContent = `RNG ${fmtInt(sync.current.distKm)} KM`;
+      const now = performance.now() / 1000;
+      for (const [id, g] of blips.current) {
+        const p = blipParams.get(id);
+        if (!p) continue;
+        const a = p.a0 + now * p.speed * p.dir;
+        const bx = Math.min(W - 30, Math.max(30, proj.earth[0] + p.r * Math.cos(a)));
+        const by = Math.min(H - 14, Math.max(14, proj.earth[1] + p.r * Math.sin(a)));
+        g.setAttribute("transform", `translate(${bx.toFixed(1)} ${by.toFixed(1)})`);
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [proj, sync]);
+  }, [proj, sync, blipParams]);
 
   return (
     <div className="pointer-events-none absolute bottom-36 right-6 hidden w-56 lg:block">
@@ -902,6 +937,38 @@ function TrajectoryPlot({
           </text>
           {/* CA tick */}
           <circle cx={proj.ca[0]} cy={proj.ca[1]} r={2} fill="#f5a524" />
+          {/* crew tracks */}
+          {others.map(([id, m]) => {
+            const st = m.zen
+              ? "#f4f4f6"
+              : !m.running
+                ? "#8a8a93"
+                : m.phase !== "focus"
+                  ? "#f5a524"
+                  : "#67e8f9";
+            return (
+              <g
+                key={id}
+                ref={(el) => {
+                  if (el) blips.current.set(id, el);
+                  else blips.current.delete(id);
+                }}
+              >
+                <circle r={2.2} fill={st} />
+                <text
+                  x={5}
+                  y={2}
+                  fill={st}
+                  fillOpacity={0.85}
+                  fontSize={5.5}
+                  fontFamily="monospace"
+                  letterSpacing={0.8}
+                >
+                  {m.callsign.split("-")[0]}
+                </text>
+              </g>
+            );
+          })}
           {/* traveler */}
           <circle ref={dot} cx={proj.ca[0]} cy={proj.ca[1]} r={3} fill="none" stroke="#f5a524" strokeWidth={0.8} strokeOpacity={0.5} />
         </svg>

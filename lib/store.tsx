@@ -12,6 +12,14 @@ import {
 } from "react";
 import { missionAudio, type AudioChannel } from "./audio";
 import {
+  crewAvailable,
+  genCallsign,
+  genClientId,
+  genRoomCode,
+  joinRoom,
+  type RoomHandle,
+} from "./crew";
+import {
   FALLBACK_APOD,
   FALLBACK_ASTEROIDS,
   FALLBACK_ISS,
@@ -20,8 +28,13 @@ import {
 import { fmtClock } from "./format";
 import type {
   Asteroid,
+  ClockMsg,
+  CrewEvent,
+  CrewMember,
+  CrewStatus,
   MissionMode,
   NasaBundle,
+  PingKind,
   SessionLog,
   Task,
   TimerPhase,
@@ -140,6 +153,25 @@ interface MissionCtx {
 
   hintSeen: boolean;
   dismissHint: () => void;
+
+  /* ------- crew link ------- */
+  crewAvailable: boolean;
+  crewStatus: CrewStatus;
+  crewCode: string | null;
+  callsign: string;
+  setCallsign: (s: string) => void;
+  crew: Record<string, CrewMember>;
+  selfId: string;
+  crewCount: number;
+  isCapcom: boolean;
+  followClock: boolean;
+  setFollowClock: (b: boolean) => void;
+  crewOpen: boolean;
+  setCrewOpen: (b: boolean) => void;
+  crewFeed: CrewEvent[];
+  joinCrew: (code?: string) => void;
+  leaveCrew: () => void;
+  sendPing: (kind: PingKind) => void;
 }
 
 const Ctx = createContext<MissionCtx | null>(null);
@@ -218,28 +250,54 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   const [missionTitle, setMissionTitle] = useState("DEEP WORK RUN");
   const [hintSeen, setHintSeen] = useState(true);
 
+  /* ------- crew link ------- */
+  const [callsign, setCallsignState] = useState("CREW-00");
+  const [crewCode, setCrewCode] = useState<string | null>(null);
+  const [crewStatus, setCrewStatus] = useState<CrewStatus>("offline");
+  const [crew, setCrew] = useState<Record<string, CrewMember>>({});
+  const [crewFeed, setCrewFeed] = useState<CrewEvent[]>([]);
+  const [crewOpen, setCrewOpen] = useState(false);
+  const [followClock, setFollowClockState] = useState(false);
+  const [selfId, setSelfId] = useState("");
+
+  const roomRef = useRef<RoomHandle | null>(null);
+  const clientId = useRef("");
+  const joinedAtRef = useRef(0);
+  const followRef = useRef(false);
+  const crewRef = useRef<Record<string, CrewMember>>({});
+  const evtSeq = useRef(0);
+  const joinCrewRef = useRef<((code?: string) => void) | null>(null);
+
   const hydrated = useRef(false);
   const endsAt = useRef(0);
 
   /* latest-values ref — lets stable callbacks read fresh state */
   const latest = useRef({
     remainingSec,
+    running,
     phase,
     durationSec,
     cycle,
     autoBreaks,
     mode,
     missionTitle,
+    zen,
+    callsign,
+    tasks,
   });
   useEffect(() => {
     latest.current = {
       remainingSec,
+      running,
       phase,
       durationSec,
       cycle,
       autoBreaks,
       mode,
       missionTitle,
+      zen,
+      callsign,
+      tasks,
     };
   });
 
@@ -257,6 +315,9 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     const s = load<SessionLog[]>("apsis.sessions");
     const pt = load<PersistTimer>("apsis.timer");
     const hint = load<boolean>("apsis.hintSeen");
+    const cid = load<string>("apsis.clientId");
+    const cs = load<string>("apsis.callsign");
+    const cc = load<string>("apsis.crewCode");
 
     queueMicrotask(() => {
       if (Array.isArray(t) && t.length) setTasks(t);
@@ -276,6 +337,13 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       }
       if (Array.isArray(s)) setSessions(s);
       if (hint) setHintSeen(true);
+      /* stable identity — generated once, persisted forever */
+      clientId.current = cid ?? genClientId();
+      setSelfId(clientId.current);
+      localStorage.setItem("apsis.clientId", JSON.stringify(clientId.current));
+      setCallsignState(cs ?? genCallsign());
+      /* re-establish the link if we were aboard when the tab closed */
+      if (cc) joinCrewRef.current?.(cc);
 
       /* restore an in-flight session — the countdown survives refresh */
       if (pt) {
@@ -353,6 +421,10 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     if (hydrated.current)
       localStorage.setItem("apsis.sessions", JSON.stringify(sessions.slice(-500)));
   }, [sessions]);
+  useEffect(() => {
+    if (hydrated.current && callsign !== "CREW-00")
+      localStorage.setItem("apsis.callsign", JSON.stringify(callsign));
+  }, [callsign]);
   useEffect(() => {
     if (hydrated.current)
       localStorage.setItem(
@@ -497,6 +569,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         setMixerOpen(false);
         setPlanOpen(false);
         setLogOpen(false);
+        setCrewOpen(false);
         return;
       }
       if (typing) return;
@@ -525,6 +598,17 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
   /* ------- actions ------- */
   const click = useCallback(() => missionAudio.click(), []);
+
+  /** crew event feed — declared early so task actions can push to it */
+  const pushEvent = useCallback(
+    (kind: CrewEvent["kind"], text: string, from?: string) => {
+      setCrewFeed((f) => [
+        ...f.slice(-39),
+        { id: ++evtSeq.current, t: Date.now(), kind, from, text },
+      ]);
+    },
+    [],
+  );
 
   const setMode = useCallback(
     (m: MissionMode) => {
@@ -615,10 +699,19 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     ]);
   }, []);
 
-  const toggleTask = useCallback((id: string) => {
-    missionAudio.click();
-    setTasks((t) => t.map((x) => (x.id === id ? { ...x, done: !x.done } : x)));
-  }, []);
+  const toggleTask = useCallback(
+    (id: string) => {
+      missionAudio.click();
+      /* clearing a waypoint pings the crew channel */
+      const task = tasks.find((x) => x.id === id);
+      if (task && !task.done) {
+        roomRef.current?.waypoint(task.label, latest.current.callsign);
+        pushEvent("wp", `WP CLEARED — ${task.label}`, latest.current.callsign);
+      }
+      setTasks((t) => t.map((x) => (x.id === id ? { ...x, done: !x.done } : x)));
+    },
+    [tasks, pushEvent],
+  );
 
   const removeTask = useCallback((id: string) => {
     missionAudio.click();
@@ -672,6 +765,181 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     setPassOpen(true);
   }, [click]);
   const closePass = useCallback(() => setPassOpen(false), []);
+
+  /* =================== CREW LINK =================== */
+
+  /** keep a render-free mirror of the roster for presence diffs */
+  useEffect(() => {
+    crewRef.current = crew;
+  }, [crew]);
+
+  /** what we broadcast about ourselves on every state change */
+  const selfPresence = useCallback(() => {
+    const l = latest.current;
+    const phaseDur =
+      l.phase === "focus"
+        ? l.durationSec
+        : l.phase === "long"
+          ? BREAK_LONG
+          : BREAK_SHORT;
+    return {
+      callsign: l.callsign,
+      phase: l.phase,
+      running: l.running,
+      zen: l.zen,
+      elapsedSec: Math.max(0, phaseDur - l.remainingSec),
+      durationSec: l.durationSec,
+      wp: l.tasks.filter((t) => t.done).length,
+      joinedAt: joinedAtRef.current,
+    };
+  }, []);
+
+  const joinCrew = useCallback(
+    (code?: string) => {
+      setCrewOpen(true);
+      if (!crewAvailable) {
+        pushEvent("info", "LINK OFFLINE — SUPABASE NOT CONFIGURED");
+        return;
+      }
+      if (roomRef.current) return;
+      const c = (code ?? genRoomCode()).toUpperCase().trim();
+      setCrewStatus("connecting");
+      setCrewCode(c);
+      joinedAtRef.current = Date.now();
+      missionAudio.click();
+      void joinRoom(c, {
+        clientId: clientId.current,
+        onStatus: (s) => {
+          setCrewStatus(s);
+          if (s === "offline")
+            pushEvent("info", "LINK FAILED — CHECK SUPABASE CONFIG");
+        },
+        onPresence: (members) => {
+          const prev = crewRef.current;
+          for (const k of Object.keys(members))
+            if (!(k in prev) && k !== clientId.current)
+              pushEvent("join", "ABOARD", members[k].callsign);
+          for (const k of Object.keys(prev))
+            if (!(k in members) && k !== clientId.current)
+              pushEvent("leave", "DEPARTED", prev[k].callsign);
+          setCrew(members);
+        },
+        onRadio: (from, kind) => {
+          missionAudio.ping();
+          pushEvent("ping", kind, from);
+        },
+        onWaypoint: (from, label) => {
+          missionAudio.ping();
+          pushEvent("wp", `WP CLEARED — ${label}`, from);
+        },
+        onClock: (m: ClockMsg) => {
+          if (!followRef.current) return;
+          /* apply the CAPCOM clock verbatim */
+          setDurationSec(m.durationSec);
+          setPhase(m.phase);
+          setCycle(m.cycle);
+          if (m.running) {
+            setRemainingSec(
+              Math.max(0, Math.round((m.endsAt - Date.now()) / 1000)),
+            );
+            setRunning(true);
+          } else {
+            setRemainingSec(m.remainingSec);
+            setRunning(false);
+          }
+          pushEvent(
+            "clock",
+            `CLOCK SYNC — ${m.phase === "focus" ? "FOCUS" : "REST"} ${m.running ? "RUNNING" : "HELD"}`,
+          );
+        },
+      }).then((room) => {
+        if (!room) {
+          setCrewCode(null);
+          roomRef.current = null;
+          return;
+        }
+        roomRef.current = room;
+        localStorage.setItem("apsis.crewCode", JSON.stringify(c));
+        pushEvent("info", `LINK ESTABLISHED — ORB ${c}`);
+        room.track(selfPresence());
+      });
+    },
+    [pushEvent, selfPresence],
+  );
+  useEffect(() => {
+    joinCrewRef.current = joinCrew;
+  }, [joinCrew]);
+
+  const leaveCrew = useCallback(() => {
+    missionAudio.click();
+    const room = roomRef.current;
+    roomRef.current = null;
+    void room?.leave();
+    setCrew({});
+    setCrewCode(null);
+    setCrewStatus("offline");
+    setFollowClockState(false);
+    followRef.current = false;
+    localStorage.removeItem("apsis.crewCode");
+    pushEvent("info", "LINK CLOSED");
+  }, [pushEvent]);
+
+  const setCallsign = useCallback(
+    (s: string) => {
+      const v = s.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 12);
+      setCallsignState(v);
+      latest.current.callsign = v;
+      if (hydrated.current)
+        localStorage.setItem("apsis.callsign", JSON.stringify(v));
+    },
+    [],
+  );
+
+  const setFollowClock = useCallback((b: boolean) => {
+    missionAudio.click();
+    setFollowClockState(b);
+    followRef.current = b;
+  }, []);
+
+  const sendPing = useCallback(
+    (kind: PingKind) => {
+      missionAudio.ping();
+      roomRef.current?.ping(kind, latest.current.callsign);
+      pushEvent("ping", kind, latest.current.callsign);
+    },
+    [pushEvent],
+  );
+
+  /** broadcast our presence whenever mission state changes */
+  const wpDone = tasks.filter((t) => t.done).length;
+  useEffect(() => {
+    roomRef.current?.track(selfPresence());
+  }, [selfPresence, phase, running, zen, durationSec, wpDone, callsign]);
+
+  /** CAPCOM = earliest boarder — they broadcast clock state on changes */
+  const isCapcom = useMemo(() => {
+    const me = crew[selfId];
+    if (!me || crewStatus !== "online") return false;
+    return Object.values(crew).every((m) => me.joinedAt <= m.joinedAt);
+  }, [crew, selfId, crewStatus]);
+
+  useEffect(() => {
+    if (!isCapcom) return;
+    roomRef.current?.clock({
+      cmd: "state",
+      phase,
+      running,
+      durationSec,
+      remainingSec: latest.current.remainingSec,
+      endsAt: endsAt.current,
+      cycle,
+    });
+  }, [isCapcom, phase, running, durationSec, cycle]);
+
+  /* note: a CAPCOM never receives its own broadcasts (self:false), so a
+     stale followClock preference while capcom is harmless — the toggle is
+     hidden and the preference resumes if capcom status is later lost */
+  const crewCount = Object.keys(crew).length;
 
   const asteroid = useMemo(
     () =>
@@ -770,6 +1038,23 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       setMissionTitle,
       hintSeen,
       dismissHint,
+      crewAvailable,
+      crewStatus,
+      crewCode,
+      callsign,
+      setCallsign,
+      crew,
+      selfId,
+      crewCount,
+      isCapcom,
+      followClock,
+      setFollowClock,
+      crewOpen,
+      setCrewOpen,
+      crewFeed,
+      joinCrew,
+      leaveCrew,
+      sendPing,
     }),
     [
       mode, setMode, zen, toggleZen, launched, launch, nasa, loading,
@@ -780,6 +1065,9 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       planOpen, mixerOpen, logOpen, volumes, setVolume, masterVol,
       setMasterVol, muted, toggleMute, passOpen, openPass, closePass,
       lastSession, missionTitle, hintSeen, dismissHint,
+      crewStatus, crewCode, callsign, setCallsign, crew, selfId, crewCount,
+      isCapcom, followClock, setFollowClock, crewOpen, crewFeed,
+      joinCrew, leaveCrew, sendPing,
     ],
   );
 

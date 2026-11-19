@@ -72,6 +72,9 @@ export default function BoardingPass() {
     missionTitle,
     setMissionTitle,
     nasa,
+    crew,
+    selfId,
+    crewStatus,
   } = useMission();
   const [story, setStory] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -87,6 +90,25 @@ export default function BoardingPass() {
   const sessionMin = Math.round(sessionSec / 60);
   const travelled = Math.round(asteroid.velocityKmh * (sessionSec / 3600));
   const doneTasks = tasks.filter((t) => t.done).slice(0, 4);
+  /* debrief — stamp the manifest when flying with a crew */
+  const manifest =
+    crewStatus === "online"
+      ? Object.entries(crew)
+          .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
+          .map(([id, m]) => ({
+            id,
+            callsign: m.callsign,
+            me: id === selfId,
+            status: m.zen
+              ? "ZEN"
+              : !m.running
+                ? "HOLD"
+                : m.phase !== "focus"
+                  ? "REST"
+                  : "FOCUS",
+          }))
+      : [];
+  const aboard = manifest.length > 0;
   const today = new Date()
     .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
     .toUpperCase();
@@ -278,6 +300,42 @@ export default function BoardingPass() {
                           WP-{String(i + 1).padStart(2, "0")}
                         </span>
                         <span className="truncate">{t.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* crew manifest — debrief section, only when linked */}
+                {aboard && (
+                  <div className="mt-4 border-t border-dashed border-white/15 pt-3">
+                    <div className="mb-1.5 flex items-center justify-between text-[7px] tracking-[0.3em] text-faint">
+                      <span>CREW MANIFEST</span>
+                      <span className="text-cyan">{manifest.length} ABOARD</span>
+                    </div>
+                    {manifest.map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between text-[10px] tracking-wider"
+                      >
+                        <span className={m.me ? "text-amber" : "text-dim"}>
+                          {m.callsign}
+                          {m.me && (
+                            <span className="ml-1.5 text-[7px] text-faint">
+                              YOU
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className={
+                            m.status === "FOCUS"
+                              ? "text-cyan"
+                              : m.status === "REST"
+                                ? "text-amber"
+                                : "text-faint"
+                          }
+                        >
+                          {m.status}
+                        </span>
                       </div>
                     ))}
                   </div>

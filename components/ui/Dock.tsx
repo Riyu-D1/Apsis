@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   Orbit,
+  Radio,
   ScrollText,
   Sun,
   Telescope,
@@ -17,6 +18,7 @@ import { useMission } from "@/lib/store";
 import type { MissionMode } from "@/lib/types";
 import BitsDock, { type DockItemData } from "@/components/reactbits/Dock";
 import AudioMixer from "./AudioMixer";
+import CrewPanel from "./CrewPanel";
 import FlightLog from "./FlightLog";
 
 const MODES: { id: MissionMode; label: string; full: string; icon: typeof Orbit }[] = [
@@ -44,6 +46,10 @@ export default function Dock() {
     tasks,
     hintSeen,
     dismissHint,
+    crewOpen,
+    setCrewOpen,
+    crewStatus,
+    crewCount,
   } = useMission();
   const openTasks = tasks.filter((t) => !t.done).length;
 
@@ -83,6 +89,14 @@ export default function Dock() {
       active: mixerOpen,
     },
     {
+      icon: <Radio className={ICON} strokeWidth={1.5} />,
+      label: "CREW LINK",
+      onClick: () => setCrewOpen(!crewOpen),
+      active: crewOpen,
+      badge:
+        crewStatus === "online" && crewCount > 0 ? crewCount : undefined,
+    },
+    {
       icon: zen ? (
         <EyeOff className={ICON} strokeWidth={1.5} />
       ) : (
@@ -111,6 +125,7 @@ export default function Dock() {
       <div className="relative">
         <AudioMixer open={mixerOpen} />
         <FlightLog open={logOpen} />
+        <CrewPanel open={crewOpen} />
         {showHint ? (
           <motion.div
             initial={{ opacity: 0 }}
