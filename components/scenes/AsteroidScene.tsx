@@ -13,53 +13,74 @@ import type { Asteroid } from "@/lib/types";
 /* Orbit model — the asteroid's flyby path is derived from real data    */
 /* ------------------------------------------------------------------ */
 
-const EARTH_POS = new THREE.Vector3(4.2, -0.8, -3.6);
 const EARTH_R = 2.3;
 
 interface OrbitSpec {
   curve: THREE.CatmullRomCurve3;
-  pts: THREE.Vector3[]; // sampled points, len = SAMPLES
+  pts: THREE.Vector3[]; // sampled points, len = SAMPLES, ordered by travel
   perigee: number; // world units from Earth's centre at closest approach
   perigeeIdx: number;
   period: number; // seconds per loop baseline
-  dir: THREE.Vector3;
-  center: THREE.Vector3;
-  a: number;
-  b: number;
+  earth: THREE.Vector3;
 }
 
 const SAMPLES = 280;
 
+/**
+ * Every asteroid gets its own flyby geometry — approach bearing, orbit-plane
+ * tilt, eccentricity and direction of travel are all seeded from the object
+ * id, while the perigee distance is bound to the real miss distance.
+ */
 function buildOrbit(asteroid: Asteroid): OrbitSpec {
+  const rand = mulberry32(seedFromString(asteroid.id));
+
   // miss distance -> perigee distance (log scale, always clears the limb)
   const norm = Math.max(
     0,
     Math.min(1, (Math.log10(Math.max(asteroid.missDistanceKm, 3e5)) - 5.4) / 1.6),
   );
-  const perigee = EARTH_R + 0.55 + norm * 3.4; // 2.85 .. 6.25
-  const a = perigee + 3.6;
-  const b = a * 0.62;
+  const perigee = EARTH_R + 0.5 + norm * 3.6; // 2.8 .. 6.4
+  const a = perigee + 3.0 + rand() * 2.4;
+  const b = a * (0.4 + rand() * 0.38);
 
-  // approach direction — mostly toward the camera so the pass transits the disc
-  const dir = new THREE.Vector3(-0.25, 0.1, -0.96).normalize();
-  const axisB = new THREE.Vector3()
-    .crossVectors(dir, new THREE.Vector3(0, 1, 0))
-    .normalize();
+  // Earth sits at a slightly different vantage per object
+  const earth = new THREE.Vector3(
+    4.2 + (rand() - 0.5) * 1.8,
+    -0.8 + (rand() - 0.5) * 1.2,
+    -3.6 + (rand() - 0.5) * 1.2,
+  );
+
+  // per-asteroid approach bearing — perigee biased toward the camera so the
+  // closest pass is always on the visible side of the disc
+  const dir = new THREE.Vector3(
+    rand() * 2 - 1,
+    (rand() * 2 - 1) * 0.9,
+    -(0.3 + rand() * 0.85),
+  ).normalize();
+
+  // orbit plane = span(dir, seeded perpendicular)
+  const axisB = new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).cross(
+    dir,
+  );
+  if (axisB.lengthSq() < 1e-4) axisB.set(1, 0, 0);
+  axisB.normalize();
 
   // ellipse centred so its near vertex sits `perigee` from Earth
-  const center = EARTH_POS.clone().addScaledVector(dir, a - perigee);
-  const pts = Array.from({ length: SAMPLES }, (_, i) => {
+  const center = earth.clone().addScaledVector(dir, a - perigee);
+  let pts = Array.from({ length: SAMPLES }, (_, i) => {
     const th = (i / SAMPLES) * Math.PI * 2;
     return center
       .clone()
       .addScaledVector(dir, Math.cos(th) * a)
       .addScaledVector(axisB, Math.sin(th) * b);
   });
+  if (rand() > 0.5) pts = pts.reverse(); // prograde vs retrograde
+
   // perigee = sample closest to Earth
   let perigeeIdx = 0;
   let best = Infinity;
   pts.forEach((p, i) => {
-    const d = p.distanceTo(EARTH_POS);
+    const d = p.distanceTo(earth);
     if (d < best) {
       best = d;
       perigeeIdx = i;
@@ -67,9 +88,9 @@ function buildOrbit(asteroid: Asteroid): OrbitSpec {
   });
   const curve = new THREE.CatmullRomCurve3(pts, true);
 
-  // velocity -> baseline orbital rate (full loop ~38s at 50k km/h)
+  // velocity -> baseline orbital rate
   const period = 90 - Math.min(asteroid.velocityKmh / 120000, 1) * 55;
-  return { curve, pts, perigee, perigeeIdx, period, dir, center, a, b };
+  return { curve, pts, perigee, perigeeIdx, period, earth };
 }
 
 /* ------------------------------------------------------------------ */
@@ -127,13 +148,13 @@ void main() {
 }
 `;
 
-function Earth() {
+function Earth({ position }: { position: THREE.Vector3 }) {
   const g = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
     if (g.current) g.current.rotation.y += dt * 0.02;
   });
   return (
-    <group position={EARTH_POS}>
+    <group position={position}>
       <group ref={g}>
         <mesh>
           <sphereGeometry args={[EARTH_R, 48, 48]} />
@@ -192,7 +213,7 @@ function OrbitPath({ spec, color }: { spec: OrbitSpec; color: string }) {
 
   const miss = spec.pts[spec.perigeeIdx];
   const leader = useMemo(() => {
-    const g = new THREE.BufferGeometry().setFromPoints([EARTH_POS, miss]);
+    const g = new THREE.BufferGeometry().setFromPoints([spec.earth, miss]);
     const l = new THREE.Line(
       g,
       new THREE.LineDashedMaterial({
@@ -205,7 +226,7 @@ function OrbitPath({ spec, color }: { spec: OrbitSpec; color: string }) {
     );
     l.computeLineDistances();
     return l;
-  }, [miss]);
+  }, [miss, spec.earth]);
 
   return (
     <group>
@@ -358,20 +379,23 @@ function Traveler({
     return l;
   }, [asteroid.hazardous]);
 
-  const tRef = useRef((seedFromString(asteroid.id) % 100) / 400); // deterministic phase
+  const tRef = useRef(
+    Math.abs(seedFromString(asteroid.id) % 100) / 400, // deterministic phase
+  );
 
   useFrame((s, dt) => {
     const g = body.current;
     if (!g) return;
     const pos = g.position;
-    const dist = Math.max(pos.distanceTo(EARTH_POS), 0.001);
+    const dist = Math.max(pos.distanceTo(spec.earth), 0.001);
     // Kepler-ish: whip past at perigee, crawl at apoapsis
     const boost = THREE.MathUtils.clamp(
       Math.pow(spec.perigee / dist, 1.5),
       0.4,
       4.2,
     );
-    tRef.current = (tRef.current + dt * boost * (1 / spec.period)) % 1;
+    tRef.current =
+      (((tRef.current + dt * boost * (1 / spec.period)) % 1) + 1) % 1;
     spec.curve.getPointAt(tRef.current, pos);
 
     // publish to the 2-D trajectory plot + live range
@@ -512,9 +536,18 @@ function Dust() {
 /* Camera — wide tracking shot with pointer parallax                    */
 /* ------------------------------------------------------------------ */
 
-function CameraRig() {
+function CameraRig({ spec }: { spec: OrbitSpec }) {
   const { camera, pointer } = useThree();
   const target = useMemo(() => new THREE.Vector3(), []);
+  // frame Earth + the closest-approach point — re-aims per asteroid
+  const aim = useMemo(
+    () =>
+      spec.earth
+        .clone()
+        .lerp(spec.pts[spec.perigeeIdx], 0.4)
+        .add(new THREE.Vector3(-1.2, 0.3, 0)),
+    [spec],
+  );
   useFrame((s) => {
     const t = s.clock.elapsedTime;
     target.set(
@@ -523,7 +556,7 @@ function CameraRig() {
       10.6,
     );
     camera.position.lerp(target, 0.05);
-    camera.lookAt(1.2, -0.2, -1.5);
+    camera.lookAt(aim);
   });
   return null;
 }
@@ -552,7 +585,7 @@ function TrajectoryPlot({
       maxX = -Infinity,
       minZ = Infinity,
       maxZ = -Infinity;
-    const all = [...spec.pts, EARTH_POS];
+    const all = [...spec.pts, spec.earth];
     all.forEach((p) => {
       minX = Math.min(minX, p.x);
       maxX = Math.max(maxX, p.x);
@@ -575,7 +608,7 @@ function TrajectoryPlot({
         return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
       })
       .join(" ");
-    return { d, earth: map(EARTH_POS), ca: map(spec.pts[spec.perigeeIdx]), map };
+    return { d, earth: map(spec.earth), ca: map(spec.pts[spec.perigeeIdx]), map };
   }, [spec]);
 
   /* sync the 2-D marker to the 3-D body (plain RAF — outside the Canvas) */
@@ -683,9 +716,9 @@ export default function AsteroidScene() {
         <Dust />
         <PolarDeck />
         <OrbitPath spec={spec} color={pathColor} />
-        <Earth />
+        <Earth position={spec.earth} />
         <Traveler asteroid={asteroid} spec={spec} sync={sync} />
-        <CameraRig />
+        <CameraRig spec={spec} />
         <EffectComposer>
           <Bloom
             intensity={0.55}
