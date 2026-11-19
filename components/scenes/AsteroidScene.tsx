@@ -185,50 +185,55 @@ void main() {
   vec3 V = normalize(cameraPosition - vWorldPos);
   vec3 p = vLocal;
 
-  float cont = fbm(p * 2.7 + vec3(7.31));
-  float land = smoothstep(0.5, 0.545, cont);
-  float elev = fbm(p * 8.0 + vec3(2.9));
+  // ~35% land with noisy coastlines
+  float cont = fbm(p * 3.2 + vec3(7.31));
+  float coast = fbm(p * 8.0 + vec3(2.9));
+  float land = smoothstep(0.56, 0.60, cont + (coast - 0.5) * 0.16);
+  float elev = fbm(p * 9.0 + vec3(5.7));
 
+  // green-dominant land — deserts only in patchy subtropical bands
   float lat = abs(p.y);
-  vec3 landCol = mix(
-    vec3(0.09, 0.24, 0.08),
-    vec3(0.45, 0.33, 0.16),
-    smoothstep(0.18, 0.46, lat),
-  );
-  landCol = mix(landCol, vec3(0.38, 0.3, 0.22), smoothstep(0.55, 0.8, elev));
-  landCol *= 0.7 + 0.6 * elev;
+  float dryBand =
+    smoothstep(0.14, 0.3, lat) *
+    (1.0 - smoothstep(0.42, 0.6, lat)) *
+    smoothstep(0.45, 0.65, fbm(p * 5.0 + vec3(9.2)));
+  vec3 landCol = mix(vec3(0.05, 0.3, 0.07), vec3(0.42, 0.38, 0.16), dryBand);
+  landCol = mix(landCol, vec3(0.3, 0.26, 0.2), smoothstep(0.62, 0.85, elev) * 0.6);
+  landCol *= 0.8 + 0.4 * elev;
 
   vec3 ocean = mix(
-    vec3(0.008, 0.05, 0.19),
-    vec3(0.02, 0.14, 0.35),
-    smoothstep(0.42, 0.52, cont),
+    vec3(0.01, 0.075, 0.25),
+    vec3(0.02, 0.19, 0.42),
+    smoothstep(0.5, 0.585, cont)
   );
   vec3 col = mix(ocean, landCol, land);
 
-  float ice = smoothstep(0.62, 0.78, lat + (fbm(p * 6.0) - 0.5) * 0.22);
+  float ice = smoothstep(0.72, 0.82, lat + (fbm(p * 6.0) - 0.5) * 0.15);
   col = mix(col, vec3(0.82, 0.88, 0.95), ice);
 
   float sunAmt = dot(N, uSunDir);
-  float day = smoothstep(-0.06, 0.14, sunAmt);
+  float day = smoothstep(-0.1, 0.1, sunAmt);
   float direct = max(sunAmt, 0.0);
 
   vec3 H = normalize(uSunDir + V);
   float spec =
-    pow(max(dot(N, H), 0.0), 48.0) * (1.0 - land) * (1.0 - ice) * direct;
+    pow(max(dot(N, H), 0.0), 72.0) * (1.0 - land) * (1.0 - ice) * direct;
 
-  vec3 lit = col * (0.03 + direct * 1.15 + day * 0.06);
-  lit += vec3(0.45, 0.6, 0.9) * spec * 1.1;
+  vec3 lit = col * (0.02 + direct * 0.95 + day * 0.03);
+  lit += vec3(0.45, 0.6, 0.9) * spec * 0.8;
 
   float term = exp(-abs(sunAmt) * 9.0);
-  lit += vec3(0.85, 0.38, 0.12) * term * 0.16;
+  lit += vec3(0.85, 0.38, 0.12) * term * 0.05;
 
+  // faint clustered city lights on the night side
   float night = 1.0 - day;
-  float pop = smoothstep(0.55, 0.75, fbm(p * 9.0 + vec3(4.2)));
-  float dots = smoothstep(0.72, 0.92, vnoise(p * 90.0));
-  lit += vec3(1.0, 0.72, 0.38) * night * land * (1.0 - ice) * pop * dots * 2.2;
+  float pop = smoothstep(0.62, 0.78, fbm(p * 9.0 + vec3(4.2)));
+  float dots = smoothstep(0.78, 0.95, vnoise(p * 90.0));
+  lit += vec3(1.0, 0.75, 0.42) * night * land * (1.0 - ice) * pop * dots * 0.9;
 
-  float fres = pow(1.0 - max(dot(N, V), 0.0), 2.8);
-  lit += vec3(0.32, 0.58, 1.0) * fres * (0.22 + day * 0.95);
+  // thin blue atmosphere rim, day side only
+  float fres = pow(1.0 - max(dot(N, V), 0.0), 3.2);
+  lit += vec3(0.3, 0.55, 1.0) * fres * day * 0.5;
 
   gl_FragColor = vec4(lit, 1.0);
 }
@@ -244,16 +249,13 @@ ${NOISE_GLSL}
 void main() {
   vec3 N = normalize(vNormal);
   vec3 p = vLocal + vec3(uTime * 0.006, 0.0, uTime * 0.002);
-  float c = fbm(p * 3.6 + vec3(11.3));
-  c = c * 0.7 + 0.3 * fbm(p * 9.0);
-  float alpha = smoothstep(0.5, 0.72, c);
+  float c = fbm(p * 3.8 + vec3(11.3));
+  c = c * 0.65 + 0.35 * fbm(p * 10.0);
+  float alpha = smoothstep(0.56, 0.78, c);
   float sunAmt = dot(N, uSunDir);
   float day = smoothstep(-0.12, 0.2, sunAmt);
-  float term = exp(-abs(sunAmt) * 9.0);
-  vec3 col =
-    vec3(0.92, 0.95, 1.0) * (0.05 + max(sunAmt, 0.0) * 1.2 + day * 0.08);
-  col += vec3(0.8, 0.35, 0.12) * term * 0.25;
-  gl_FragColor = vec4(col, alpha * (0.06 + day * 0.94) * 0.9);
+  vec3 col = vec3(0.95, 0.97, 1.0) * (0.06 + max(sunAmt, 0.0) * 0.95);
+  gl_FragColor = vec4(col, alpha * (0.04 + day * 0.96) * 0.8);
 }
 `;
 
@@ -271,8 +273,8 @@ const ATMO_FRAG = /* glsl */ `
 varying vec3 vNormal;
 varying vec3 vView;
 void main() {
-  float f = pow(max(0.0, 0.72 - dot(vNormal, vView)), 4.0);
-  gl_FragColor = vec4(vec3(0.3, 0.55, 1.0) * f * 1.4, f);
+  float f = pow(max(0.0, 0.74 - dot(vNormal, vView)), 4.5);
+  gl_FragColor = vec4(vec3(0.3, 0.55, 1.0) * f * 1.1, f);
 }
 `;
 
