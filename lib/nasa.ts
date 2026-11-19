@@ -1,14 +1,12 @@
 import {
   FALLBACK_APOD,
   FALLBACK_ASTEROIDS,
-  FALLBACK_EPIC,
   FALLBACK_ISS,
   FALLBACK_SOLAR,
 } from "./fallback";
 import type {
   ApodImage,
   Asteroid,
-  EpicImage,
   FeedSource,
   IssPosition,
   SolarActivity,
@@ -157,41 +155,6 @@ export async function getApod(): Promise<Result<ApodImage[]>> {
     return { data, source: "live" };
   } catch {
     return { data: FALLBACK_APOD, source: "cache" };
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* EPIC — full-disc Earth imagery                                       */
-/* ------------------------------------------------------------------ */
-
-const EPIC_API = "https://epic.gsfc.nasa.gov";
-
-interface EpicEntry {
-  identifier: string;
-  caption: string;
-  image: string;
-  date: string;
-}
-
-export async function getEpic(): Promise<Result<EpicImage[]>> {
-  try {
-    const json = await fetchJson(`${EPIC_API}/api/natural`);
-    if (!Array.isArray(json) || !json.length) throw new Error("empty feed");
-
-    const data: EpicImage[] = (json as EpicEntry[]).slice(0, 14).map((e) => {
-      const [day] = e.date.split(" ");
-      const [y, m, d] = day.split("-");
-      return {
-        id: e.identifier,
-        caption: e.caption ?? "Full sunlit disc — DSCOVR EPIC",
-        date: e.date,
-        url: `${EPIC_API}/archive/natural/${y}/${m}/${d}/jpg/${e.image}.jpg`,
-      };
-    });
-
-    return { data, source: "live" };
-  } catch {
-    return { data: FALLBACK_EPIC, source: "cache" };
   }
 }
 

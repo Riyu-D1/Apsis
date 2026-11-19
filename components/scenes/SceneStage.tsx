@@ -1,11 +1,56 @@
 "use client";
 
+import { Component, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMission } from "@/lib/store";
-import AsteroidScene from "./AsteroidScene";
-import ApodScene from "./ApodScene";
-import CupolaScene from "./CupolaScene";
-import SolarScene from "./SolarScene";
+import type { MissionMode } from "@/lib/types";
+
+/* each scene ships in its own chunk — only the active profile's code loads */
+const AsteroidScene = dynamic(() => import("./AsteroidScene"));
+const ApodScene = dynamic(() => import("./ApodScene"));
+const SolarScene = dynamic(() => import("./SolarScene"));
+
+const SCENE_META: Record<MissionMode, { label: string; desc: string }> = {
+  asteroid: {
+    label: "Asteroid Hitchhiker",
+    desc: "3D flyby tracking of today's near-Earth asteroids",
+  },
+  apod: {
+    label: "Deep Space Drift",
+    desc: "NASA astronomy picture archive gallery",
+  },
+  solar: {
+    label: "Solar Telemetry",
+    desc: "Generative sun driven by live space-weather data",
+  },
+};
+
+/** If a WebGL scene dies, the station stays alive — degrade to a panel. */
+class SceneBoundary extends Component<
+  { children: ReactNode; name: string },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="glass rounded-xl px-6 py-4 text-center font-mono text-[10px] tracking-[0.3em] text-faint">
+            {this.props.name} — RENDER OFFLINE
+            <div className="mt-1.5 text-[8px] text-faint/70">
+              SWITCH PROFILE OR RELOAD
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /** Cinematic viewfinder — corner brackets + edge ticks + faint grid. */
 function ViewportFrame() {
@@ -37,8 +82,13 @@ function ViewportFrame() {
 
 export default function SceneStage() {
   const { mode } = useMission();
+  const meta = SCENE_META[mode];
   return (
-    <div className="absolute inset-0">
+    <div
+      className="absolute inset-0"
+      role="img"
+      aria-label={`${meta.label} — ${meta.desc}`}
+    >
       <AnimatePresence mode="wait">
         <motion.div
           key={mode}
@@ -48,10 +98,11 @@ export default function SceneStage() {
           exit={{ opacity: 0, scale: 0.99, filter: "brightness(0.5)" }}
           transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
         >
-          {mode === "asteroid" && <AsteroidScene />}
-          {mode === "apod" && <ApodScene />}
-          {mode === "cupola" && <CupolaScene />}
-          {mode === "solar" && <SolarScene />}
+          <SceneBoundary name={meta.label.toUpperCase()}>
+            {mode === "asteroid" && <AsteroidScene />}
+            {mode === "apod" && <ApodScene />}
+            {mode === "solar" && <SolarScene />}
+          </SceneBoundary>
         </motion.div>
       </AnimatePresence>
       <ViewportFrame />

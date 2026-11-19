@@ -33,6 +33,10 @@
   @keyframes rotate360 {
     to { transform: rotate(360deg); }
   }
+  @keyframes apod-progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
 }
 
 html,
@@ -51,6 +55,22 @@ body {
 ::selection {
   background: #f5a524;
   color: #050507;
+}
+
+:focus-visible {
+  outline: 1px solid rgba(245, 165, 36, 0.8);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 * {

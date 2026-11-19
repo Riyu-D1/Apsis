@@ -1,4 +1,15 @@
-export type MissionMode = "asteroid" | "apod" | "cupola" | "solar";
+export type MissionMode = "asteroid" | "apod" | "solar";
+
+/** Timer engine phases — focus work vs. the two break kinds. */
+export type TimerPhase = "focus" | "short" | "long";
+
+/** One completed focus session, logged for history + streaks. */
+export interface SessionLog {
+  t: number; // epoch ms when the session ended
+  dur: number; // seconds focused
+  mode: MissionMode;
+  label?: string;
+}
 
 export interface Asteroid {
   id: string;
@@ -17,13 +28,6 @@ export interface ApodImage {
   url: string;
   hdurl: string;
   credit: string;
-}
-
-export interface EpicImage {
-  id: string;
-  caption: string;
-  date: string;
-  url: string;
 }
 
 export interface SolarActivity {
@@ -56,13 +60,11 @@ export type FeedSource = "live" | "cache";
 export interface NasaBundle {
   asteroids: Asteroid[];
   apod: ApodImage[];
-  epic: EpicImage[];
   solar: SolarActivity;
   iss: IssPosition;
   sources: {
     neows: FeedSource;
     apod: FeedSource;
-    epic: FeedSource;
     donki: FeedSource;
     iss: FeedSource;
   };

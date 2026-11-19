@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toPng } from "html-to-image";
-import { Check, Download, X } from "lucide-react";
+import { Check, Download, Share2, X } from "lucide-react";
 import { useMission } from "@/lib/store";
 import { fmtInt, missionCode, mulberry32, seedFromString } from "@/lib/format";
 import CountUp from "@/components/reactbits/CountUp";
@@ -11,7 +11,6 @@ import CountUp from "@/components/reactbits/CountUp";
 const MODE_NAMES = {
   asteroid: "ASTEROID HITCHHIKER",
   apod: "DEEP SPACE DRIFT",
-  cupola: "ORBITAL CUPOLA",
   solar: "SOLAR TELEMETRY",
 } as const;
 
@@ -77,29 +76,74 @@ export default function BoardingPass() {
   const [story, setStory] = useState(false);
   const [busy, setBusy] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  /* a fresh boarding code every time the pass is issued — passOpen is the
+     deliberate trigger; the closed pass is never rendered */
+  const code = useMemo(() => {
+    void passOpen;
+    return missionCode();
+  }, [passOpen]);
 
   const sessionSec = lastSession?.durationSec ?? durationSec;
   const sessionMin = Math.round(sessionSec / 60);
   const travelled = Math.round(asteroid.velocityKmh * (sessionSec / 3600));
-  const code = useMemo(() => missionCode(), []);
   const doneTasks = tasks.filter((t) => t.done).slice(0, 4);
   const today = new Date()
     .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
     .toUpperCase();
 
+  const renderPng = async () => {
+    if (!cardRef.current) return null;
+    const dataUrl = await toPng(cardRef.current, {
+      pixelRatio: 3,
+      backgroundColor: "#050507",
+      cacheBust: true,
+    });
+    return await (await fetch(dataUrl)).blob();
+  };
+
   const download = async () => {
     if (!cardRef.current || busy) return;
     setBusy(true);
     try {
-      const url = await toPng(cardRef.current, {
-        pixelRatio: 3,
-        backgroundColor: "#050507",
-        cacheBust: true,
-      });
+      const blob = await renderPng();
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${code}-boarding-pass.png`;
       a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* native share sheet where supported; falls back to a plain download */
+  const share = async () => {
+    if (!cardRef.current || busy) return;
+    setBusy(true);
+    try {
+      const blob = await renderPng();
+      if (!blob) return;
+      const file = new File([blob], `${code}-boarding-pass.png`, {
+        type: "image/png",
+      });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Boarding pass ${code}`,
+          text: `${sessionMin} min of deep work — ORBITAL // FOCUS`,
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      /* user dismissed the sheet — that's fine */
     } finally {
       setBusy(false);
     }
@@ -253,7 +297,7 @@ export default function BoardingPass() {
                 </div>
 
                 <div className="mt-4 border-t border-white/10 pt-3 text-center text-[7px] leading-relaxed tracking-[0.25em] text-faint">
-                  TELEMETRY // NASA OPEN API — NEOWS · APOD · EPIC · DONKI
+                  TELEMETRY // NASA OPEN API — NEOWS · APOD · DONKI
                   <br />
                   UPLINK {nasa.sources.neows === "live" ? "LIVE" : "CACHED"} — NOT
                   AFFILIATED WITH NASA
@@ -282,10 +326,18 @@ export default function BoardingPass() {
               <button
                 onClick={download}
                 disabled={busy}
-                className="flex items-center gap-2 rounded-full bg-bone px-5 py-2 font-mono text-[10px] font-semibold tracking-[0.25em] text-void transition-opacity hover:opacity-85 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 font-mono text-[10px] tracking-[0.2em] text-dim transition-colors hover:border-white/30 hover:text-bone disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" strokeWidth={2} />
-                {busy ? "PRINTING…" : "PNG"}
+                PNG
+              </button>
+              <button
+                onClick={share}
+                disabled={busy}
+                className="flex items-center gap-2 rounded-full bg-bone px-5 py-2 font-mono text-[10px] font-semibold tracking-[0.25em] text-void transition-opacity hover:opacity-85 disabled:opacity-50"
+              >
+                <Share2 className="h-3.5 w-3.5" strokeWidth={2} />
+                {busy ? "PRINTING…" : "SHARE"}
               </button>
               <button
                 onClick={closePass}

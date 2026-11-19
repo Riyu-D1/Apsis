@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { useMission } from "@/lib/store";
 import { fmtInt } from "@/lib/format";
@@ -295,6 +295,18 @@ function SunCaption() {
 
 /* ------------------------------------------------------------------ */
 
+/** Pause the render loop while the tab is hidden — saves GPU + battery. */
+function FramePause() {
+  const setFrameloop = useThree((s) => s.setFrameloop);
+  useEffect(() => {
+    const apply = () => setFrameloop(document.hidden ? "never" : "always");
+    apply();
+    document.addEventListener("visibilitychange", apply);
+    return () => document.removeEventListener("visibilitychange", apply);
+  }, [setFrameloop]);
+  return null;
+}
+
 export default function SolarScene() {
   return (
     <div className="absolute inset-0">
@@ -304,6 +316,7 @@ export default function SolarScene() {
         className="!absolute inset-0"
       >
         <color attach="background" args={["#050507"]} />
+        <FramePause />
         <Sun />
         <EffectComposer>
           <Bloom

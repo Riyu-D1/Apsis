@@ -17,10 +17,26 @@ const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const description =
+  "Aesthetic NASA telemetry & deep-work station. Live asteroid, solar, and Earth imagery driving a cinematic focus timer.";
+
 export const metadata: Metadata = {
   title: "ORBITAL // FOCUS",
-  description:
-    "Aesthetic NASA telemetry & deep-work station. Live asteroid, solar, and Earth imagery driving a cinematic focus timer.",
+  description,
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  ),
+  openGraph: {
+    title: "ORBITAL // FOCUS",
+    description,
+    type: "website",
+    siteName: "ORBITAL // FOCUS",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ORBITAL // FOCUS",
+    description,
+  },
 };
 
 export const viewport: Viewport = {

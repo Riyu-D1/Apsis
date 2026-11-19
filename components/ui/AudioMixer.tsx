@@ -14,7 +14,8 @@ const CHANNELS: { id: AudioChannel; label: string }[] = [
 ];
 
 export default function AudioMixer({ open }: { open: boolean }) {
-  const { volumes, setVolume, muted, toggleMute } = useMission();
+  const { volumes, setVolume, masterVol, setMasterVol, muted, toggleMute } =
+    useMission();
 
   return (
     <AnimatePresence>
@@ -57,6 +58,22 @@ export default function AudioMixer({ open }: { open: boolean }) {
               </button>
             </div>
             <div className="flex flex-col gap-3.5">
+              <label className="block">
+                <span className="mb-1.5 flex items-center justify-between font-mono text-[9px] tracking-[0.2em] text-bone/70">
+                  BUS LEVEL
+                  <span className="text-faint">{Math.round(masterVol * 100)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(masterVol * 100)}
+                  onChange={(e) => setMasterVol(Number(e.target.value) / 100)}
+                  className="mission-range w-full"
+                  style={{ ["--fill" as string]: `${Math.round(masterVol * 100)}%` }}
+                  aria-label="Master volume"
+                />
+              </label>
               {CHANNELS.map((c) => {
                 const pct = Math.round(volumes[c.id] * 100);
                 return (
@@ -75,6 +92,7 @@ export default function AudioMixer({ open }: { open: boolean }) {
                       }
                       className="mission-range w-full"
                       style={{ ["--fill" as string]: `${pct}%` }}
+                      aria-label={c.label}
                     />
                   </label>
                 );

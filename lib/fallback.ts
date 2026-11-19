@@ -1,7 +1,6 @@
 import type {
   ApodImage,
   Asteroid,
-  EpicImage,
   IssPosition,
   SolarActivity,
 } from "./types";
@@ -88,45 +87,6 @@ export const FALLBACK_APOD: ApodImage[] = [
     url: NASA_IMG("PIA01322"),
     hdurl: NASA_IMG("PIA01322"),
     credit: "NASA / ESA / STScI",
-  },
-];
-
-export const FALLBACK_EPIC: EpicImage[] = [
-  {
-    id: "epic-1",
-    caption: "Full sunlit disc — DSCOVR EPIC, L1 halo orbit",
-    date: "2015-10-31 07:48:44",
-    url: "https://epic.gsfc.nasa.gov/archive/natural/2015/10/31/png/epic_1b_20151031074844.png",
-  },
-  {
-    id: "epic-2",
-    caption: "Full sunlit disc — DSCOVR EPIC, L1 halo orbit",
-    date: "2015-12-25 17:05:59",
-    url: "https://epic.gsfc.nasa.gov/archive/natural/2015/12/25/png/epic_1b_20151225170559.png",
-  },
-  {
-    id: "epic-3",
-    caption: "Full sunlit disc — DSCOVR EPIC, L1 halo orbit",
-    date: "2016-07-05 23:07:30",
-    url: "https://epic.gsfc.nasa.gov/archive/natural/2016/07/05/png/epic_1b_20160705230730.png",
-  },
-  {
-    id: "epic-4",
-    caption: "Full sunlit disc — DSCOVR EPIC, L1 halo orbit",
-    date: "2024-04-08 18:33:41",
-    url: "https://epic.gsfc.nasa.gov/archive/natural/2024/04/08/png/epic_1b_20240408183341.png",
-  },
-  {
-    id: "epic-5",
-    caption: "Full sunlit disc — DSCOVR EPIC, L1 halo orbit",
-    date: "2024-09-22 12:11:12",
-    url: "https://epic.gsfc.nasa.gov/archive/natural/2024/09/22/png/epic_1b_20240922121112.png",
-  },
-  {
-    id: "epic-6",
-    caption: "Full sunlit disc — DSCOVR EPIC, L1 halo orbit",
-    date: "2025-03-14 09:42:55",
-    url: "https://epic.gsfc.nasa.gov/archive/natural/2025/03/14/png/epic_1b_20250314094255.png",
   },
 ];
 

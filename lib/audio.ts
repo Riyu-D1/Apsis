@@ -19,6 +19,8 @@ class MissionAudio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private channels = new Map<AudioChannel, GainNode>();
+  private masterVol = 0.9;
+  private mutedFlag = false;
 
   /** Must be called from a user gesture (autoplay policy). */
   init() {
@@ -36,7 +38,7 @@ class MissionAudio {
     this.ctx = ctx;
 
     const master = ctx.createGain();
-    master.gain.value = 0.9;
+    master.gain.value = this.masterVol;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -18;
     comp.ratio.value = 6;
@@ -100,7 +102,7 @@ class MissionAudio {
 
   private noiseBuffer(brown: boolean) {
     const ctx = this.ctx!;
-    const len = ctx.sampleRate * 3;
+    const len = ctx.sampleRate * 4;
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);
     let last = 0;
@@ -112,6 +114,13 @@ class MissionAudio {
       } else {
         d[i] = w;
       }
+    }
+    // seamless loop — crossfade the tail into the head so the loop
+    // point doesn't click every cycle (random walk never returns to 0)
+    const F = Math.floor(ctx.sampleRate * 0.5);
+    for (let i = 0; i < F; i++) {
+      const t = i / F;
+      d[i] = d[i] * t + d[len - F + i] * (1 - t);
     }
     return buf;
   }
@@ -161,10 +170,20 @@ class MissionAudio {
     g.gain.setTargetAtTime(v * SCALE[channel], this.ctx.currentTime, 0.06);
   }
 
+  setMasterVolume(v: number) {
+    this.masterVol = v;
+    this.applyMaster();
+  }
+
   setMuted(muted: boolean) {
+    this.mutedFlag = muted;
+    this.applyMaster();
+  }
+
+  private applyMaster() {
     if (!this.master || !this.ctx) return;
     this.master.gain.setTargetAtTime(
-      muted ? 0 : 0.9,
+      this.mutedFlag ? 0 : this.masterVol,
       this.ctx.currentTime,
       0.05,
     );

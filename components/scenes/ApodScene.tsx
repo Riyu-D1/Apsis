@@ -10,6 +10,7 @@ import {
 } from "framer-motion";
 import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { useMission } from "@/lib/store";
+import { useReducedMotion } from "@/lib/useReducedMotion";
 import ScrambleText from "@/components/ui/ScrambleText";
 
 const ADVANCE_MS = 16_000;
@@ -54,16 +55,20 @@ export default function ApodScene() {
   const { nasa, apodIndex, nextApod, goApod, reportApodError, apodAllFaulted } =
     useMission();
   const [abstractOpen, setAbstractOpen] = useState(false);
+  const [uiHover, setUiHover] = useState(false);
+  const reducedMotion = useReducedMotion();
   const list = nasa.apod;
   const idx = list.length ? apodIndex % list.length : 0;
   const img = list[idx];
 
-  /* auto-advance — resets whenever the index moves (manual or auto) */
+  /* auto-advance — pauses while the reader has the abstract open or is
+     hovering the editorial UI; resets whenever the index moves */
+  const paused = abstractOpen || uiHover;
   useEffect(() => {
-    if (!list.length) return;
+    if (!list.length || paused) return;
     const iv = setInterval(() => goApod((idx + 1) % list.length), ADVANCE_MS);
     return () => clearInterval(iv);
-  }, [idx, list.length, goApod]);
+  }, [idx, list.length, goApod, paused]);
 
   /* close the abstract when the frame changes */
   const prevUrl = useRef(img?.url);
@@ -96,7 +101,10 @@ export default function ApodScene() {
       }}
     >
       {/* image with parallax wrapper + ken burns inside */}
-      <motion.div className="absolute inset-0" style={{ x: px, y: py }}>
+      <motion.div
+        className="absolute inset-0"
+        style={reducedMotion ? undefined : { x: px, y: py }}
+      >
         {img && !apodAllFaulted ? (
           <AnimatePresence mode="sync">
             <motion.img
@@ -108,7 +116,9 @@ export default function ApodScene() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 1.7, ease: "easeInOut" }}
-              className="animate-kenburns absolute inset-0 h-full w-full scale-[1.06] object-cover"
+              className={`absolute inset-0 h-full w-full object-cover ${
+                reducedMotion ? "" : "animate-kenburns scale-[1.06]"
+              }`}
             />
           </AnimatePresence>
         ) : (
@@ -124,7 +134,11 @@ export default function ApodScene() {
       {img && (
         <>
           {/* editorial block — bottom left */}
-          <div className="absolute bottom-28 left-5 max-w-xl sm:left-8">
+          <div
+            className="absolute bottom-28 left-5 max-w-xl sm:left-8"
+            onMouseEnter={() => setUiHover(true)}
+            onMouseLeave={() => setUiHover(false)}
+          >
             <div className="mb-2 flex items-center gap-3 font-mono text-[10px] tracking-[0.3em] text-faint">
               <span className="text-amber">
                 {String(idx + 1).padStart(2, "0")}
@@ -174,20 +188,28 @@ export default function ApodScene() {
                 </AnimatePresence>
               </>
             )}
-            {/* progress bar for auto-advance */}
+            {/* progress bar for auto-advance — freezes while paused */}
             <div className="mt-4 h-px w-40 bg-white/10">
-              <motion.div
-                key={img.hdurl}
-                className="h-px bg-amber"
-                initial={{ width: "0%" }}
-                animate={{ width: "100%" }}
-                transition={{ duration: ADVANCE_MS / 1000, ease: "linear" }}
+              <div
+                key={`${img.hdurl}-${paused}`}
+                className={`h-px origin-left ${paused ? "bg-white/30" : "bg-amber"}`}
+                style={
+                  paused
+                    ? { transform: "scaleX(0.35)" }
+                    : {
+                        animation: `apod-progress ${ADVANCE_MS}ms linear forwards`,
+                      }
+                }
               />
             </div>
           </div>
 
           {/* filmstrip rail — bottom center */}
-          <div className="absolute bottom-24 left-1/2 hidden -translate-x-1/2 items-center gap-1.5 md:flex">
+          <div
+            className="absolute bottom-24 left-1/2 hidden -translate-x-1/2 items-center gap-1.5 md:flex"
+            onMouseEnter={() => setUiHover(true)}
+            onMouseLeave={() => setUiHover(false)}
+          >
             <button
               onClick={() => goApod((idx - 1 + list.length) % list.length)}
               className="glass flex h-9 w-9 items-center justify-center rounded-full text-dim transition-colors hover:border-white/25 hover:text-bone"

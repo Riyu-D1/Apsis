@@ -7,7 +7,7 @@ import { Html, Stars } from "@react-three/drei";
 import { Bloom, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { useMission } from "@/lib/store";
 import { fmtInt, mulberry32, seedFromString } from "@/lib/format";
-import type { Asteroid } from "@/lib/types";
+import type { Asteroid, IssPosition } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
 /* Orbit model — the asteroid's flyby path is derived from real data    */
@@ -280,7 +280,93 @@ void main() {
 
 const SUN_DIR = new THREE.Vector3(5, 4, 3).normalize();
 
-function Earth({ position }: { position: THREE.Vector3 }) {
+/**
+ * The ISS on its real 51.6°-inclination orbit. The marker's position is
+ * derived from the live sub-satellite lat/lon: solve the argument of
+ * latitude u from sin(lat) = sin(i)·sin(u), recover the longitude of the
+ * ascending node, then rotate the whole orbit about Y so the marker sits
+ * exactly on the ring at the published longitude.
+ */
+function IssTrack({ iss }: { iss: IssPosition }) {
+  const marker = useRef<THREE.Group>(null);
+  const { pts, markerPos } = useMemo(() => {
+    const incl = (51.6 * Math.PI) / 180;
+    const r = EARTH_R * (1 + iss.altKm / 6371);
+    const la = (iss.lat * Math.PI) / 180;
+    const lo = (iss.lon * Math.PI) / 180;
+
+    const sinU = THREE.MathUtils.clamp(Math.sin(la) / Math.sin(incl), -1, 1);
+    const orbLon = (uu: number) =>
+      Math.atan2(Math.sin(uu) * Math.cos(incl), Math.cos(uu));
+    const cands = [Math.asin(sinU), Math.PI - Math.asin(sinU)];
+    let u = cands[0];
+    let bd = Infinity;
+    for (const c of cands) {
+      const dl = Math.abs(
+        Math.atan2(Math.sin(orbLon(c) - lo), Math.cos(orbLon(c) - lo)),
+      );
+      if (dl < bd) {
+        bd = dl;
+        u = c;
+      }
+    }
+    // yaw the orbit plane so the marker's longitude matches the feed
+    const theta = orbLon(u) - lo;
+    const P = (uu: number) => {
+      const x = r * Math.cos(uu);
+      const y = r * Math.sin(uu) * Math.sin(incl);
+      const z = r * Math.sin(uu) * Math.cos(incl);
+      return new THREE.Vector3(
+        x * Math.cos(theta) + z * Math.sin(theta),
+        y,
+        -x * Math.sin(theta) + z * Math.cos(theta),
+      );
+    };
+
+    const pts = Array.from({ length: 140 }, (_, k) =>
+      P((k / 140) * Math.PI * 2),
+    );
+    return { pts, markerPos: P(u), u };
+  }, [iss]);
+
+  const ring = useMemo(() => {
+    const l = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({
+        color: "#67e8f9",
+        transparent: true,
+        opacity: 0.22,
+      }),
+    );
+    return l;
+  }, [pts]);
+
+  // glide toward the next published position instead of teleporting
+  const target = useMemo(() => markerPos.clone(), [markerPos]);
+  useFrame((_, dt) => {
+    if (!marker.current) return;
+    marker.current.position.lerp(target, Math.min(1, dt * 1.6));
+  });
+
+  return (
+    <group>
+      <primitive object={ring} />
+      <group ref={marker} position={markerPos}>
+        <mesh>
+          <octahedronGeometry args={[0.075]} />
+          <meshBasicMaterial color="#67e8f9" />
+        </mesh>
+        <Html position={[0, 0.28, 0]} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+          <div className="w-max -translate-x-1/2 whitespace-nowrap font-mono text-[8px] tracking-[0.25em] text-cyan/80">
+            ISS
+          </div>
+        </Html>
+      </group>
+    </group>
+  );
+}
+
+function Earth({ position, iss }: { position: THREE.Vector3; iss: IssPosition }) {
   const g = useRef<THREE.Group>(null);
   const surfMat = useMemo(
     () =>
@@ -308,6 +394,7 @@ function Earth({ position }: { position: THREE.Vector3 }) {
   });
   return (
     <group position={position}>
+      <IssTrack iss={iss} />
       <group ref={g}>
         <mesh material={surfMat}>
           <sphereGeometry args={[EARTH_R, 64, 64]} />
@@ -829,8 +916,20 @@ function TrajectoryPlot({
 
 /* ------------------------------------------------------------------ */
 
+/** Pause the render loop while the tab is hidden — saves GPU + battery. */
+function FramePause() {
+  const setFrameloop = useThree((s) => s.setFrameloop);
+  useEffect(() => {
+    const apply = () => setFrameloop(document.hidden ? "never" : "always");
+    apply();
+    document.addEventListener("visibilitychange", apply);
+    return () => document.removeEventListener("visibilitychange", apply);
+  }, [setFrameloop]);
+  return null;
+}
+
 export default function AsteroidScene() {
-  const { asteroid } = useMission();
+  const { asteroid, nasa } = useMission();
   const spec = useMemo(() => buildOrbit(asteroid), [asteroid]);
   const sync = useRef<TrackSync>({ pos: new THREE.Vector3(), distKm: 0, t: 0 });
   const pathColor = asteroid.hazardous ? "#ff5f45" : "#f4f4f6";
@@ -865,8 +964,9 @@ export default function AsteroidScene() {
         />
         <Dust />
         <PolarDeck />
+        <FramePause />
         <OrbitPath spec={spec} color={pathColor} />
-        <Earth position={spec.earth} />
+        <Earth position={spec.earth} iss={nasa.iss} />
         <Traveler asteroid={asteroid} spec={spec} sync={sync} />
         <CameraRig spec={spec} />
         <EffectComposer>

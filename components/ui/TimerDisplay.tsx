@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Pause, Play, RotateCcw } from "lucide-react";
-import { useMission } from "@/lib/store";
+import { Coffee, Pause, Play, RotateCcw } from "lucide-react";
+import { useClock, useMission, BREAK_SHORT, BREAK_LONG } from "@/lib/store";
 import { fmtClock } from "@/lib/format";
 import ClickSpark from "@/components/reactbits/ClickSpark";
 
@@ -16,21 +16,41 @@ const PRESETS = [
 export default function TimerDisplay() {
   const {
     durationSec,
-    remainingSec,
-    running,
+    autoBreaks,
+    setAutoBreaks,
     setPreset,
     startTimer,
     pauseTimer,
     resetTimer,
+    endBreak,
     zen,
     launched,
   } = useMission();
+  const { remainingSec, running, phase, cycle } = useClock();
   const [customOpen, setCustomOpen] = useState(false);
   const [customMin, setCustomMin] = useState("45");
 
-  const progress = durationSec ? 1 - remainingSec / durationSec : 0;
+  const isBreak = phase !== "focus";
+  const phaseLen = isBreak
+    ? phase === "long"
+      ? BREAK_LONG
+      : BREAK_SHORT
+    : durationSec;
+  const progress = phaseLen ? 1 - remainingSec / phaseLen : 0;
   const R = 150;
   const C = 2 * Math.PI * R;
+
+  const status = isBreak
+    ? running
+      ? phase === "long"
+        ? "LONG REST"
+        : "REST ORBIT"
+      : "REST PAUSED"
+    : running
+      ? "IN FLIGHT"
+      : remainingSec === durationSec
+        ? "STANDBY"
+        : "HOLD";
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
@@ -62,7 +82,13 @@ export default function TimerDisplay() {
                   y1={170 + Math.sin(a) * r1}
                   x2={170 + Math.cos(a) * R}
                   y2={170 + Math.sin(a) * R}
-                  stroke={major ? "rgba(245,165,36,0.5)" : "rgba(255,255,255,0.14)"}
+                  stroke={
+                    major
+                      ? isBreak
+                        ? "rgba(103,232,249,0.5)"
+                        : "rgba(245,165,36,0.5)"
+                      : "rgba(255,255,255,0.14)"
+                  }
                   strokeWidth={major ? 1.4 : 1}
                 />
               );
@@ -82,17 +108,21 @@ export default function TimerDisplay() {
               cy="170"
               r={R}
               fill="none"
-              stroke="#f4f4f6"
+              stroke={isBreak ? "#67e8f9" : "#f4f4f6"}
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeDasharray={C}
               strokeDashoffset={C * (1 - progress)}
-              className="transition-[stroke-dashoffset] duration-500 ease-linear"
+              className="transition-[stroke-dashoffset,stroke] duration-500 ease-linear"
             />
           </svg>
           <div className="flex flex-col items-center">
-            <div className="font-mono text-[10px] tracking-[0.5em] text-faint">
-              {running ? "IN FLIGHT" : remainingSec === durationSec ? "STANDBY" : "HOLD"}
+            <div
+              className={`font-mono text-[10px] tracking-[0.5em] ${
+                isBreak ? "text-cyan" : "text-faint"
+              }`}
+            >
+              {status}
             </div>
             <div
               className="text-glow mt-2 font-display font-light tracking-tight text-bone"
@@ -105,8 +135,23 @@ export default function TimerDisplay() {
               {fmtClock(remainingSec)}
             </div>
             <div className="mt-2 font-mono text-[9px] tracking-[0.4em] text-faint">
-              T-MINUS // MISSION CLOCK
+              {isBreak ? "RECHARGE // MISSION CLOCK" : "T-MINUS // MISSION CLOCK"}
             </div>
+            {/* pomodoro cycle pips */}
+            {autoBreaks && !isBreak && (
+              <div className="mt-3 flex items-center gap-1.5">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1 w-3 rounded-full ${
+                      i < cycle % 4 || (cycle > 0 && cycle % 4 === 0)
+                        ? "bg-amber"
+                        : "bg-white/15"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -118,31 +163,42 @@ export default function TimerDisplay() {
             zen || !launched ? "invisible" : ""
           }`}
         >
-          <div className="flex items-center gap-2">
-            {PRESETS.map((p) => (
+          {!isBreak && (
+            <div className="flex items-center gap-2">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  onClick={() => setPreset(p.sec)}
+                  className={`glass-soft rounded-full px-4 py-1.5 font-mono text-[10px] tracking-[0.2em] transition-colors ${
+                    durationSec === p.sec
+                      ? "border-amber/50 text-amber"
+                      : "text-dim hover:text-bone"
+                  }`}
+                >
+                  {p.label} {p.sec / 60}
+                </button>
+              ))}
               <button
-                key={p.label}
-                onClick={() => setPreset(p.sec)}
+                onClick={() => setCustomOpen((o) => !o)}
                 className={`glass-soft rounded-full px-4 py-1.5 font-mono text-[10px] tracking-[0.2em] transition-colors ${
-                  durationSec === p.sec
-                    ? "border-amber/50 text-amber"
-                    : "text-dim hover:text-bone"
+                  customOpen ? "border-cyan/50 text-cyan" : "text-dim hover:text-bone"
                 }`}
               >
-                {p.label} {p.sec / 60}
+                CUSTOM
               </button>
-            ))}
-            <button
-              onClick={() => setCustomOpen((o) => !o)}
-              className={`glass-soft rounded-full px-4 py-1.5 font-mono text-[10px] tracking-[0.2em] transition-colors ${
-                customOpen ? "border-cyan/50 text-cyan" : "text-dim hover:text-bone"
-              }`}
-            >
-              CUSTOM
-            </button>
-          </div>
+              <button
+                onClick={() => setAutoBreaks(!autoBreaks)}
+                title={`Auto breaks — 5 min rest after each session, 15 min every 4th`}
+                className={`glass-soft rounded-full px-4 py-1.5 font-mono text-[10px] tracking-[0.2em] transition-colors ${
+                  autoBreaks ? "border-cyan/50 text-cyan" : "text-dim hover:text-bone"
+                }`}
+              >
+                BREAKS {autoBreaks ? "ON" : "OFF"}
+              </button>
+            </div>
+          )}
 
-          {customOpen && (
+          {customOpen && !isBreak && (
             <form
               className="glass flex items-center gap-2 rounded-full px-4 py-2"
               onSubmit={(e) => {
@@ -158,6 +214,7 @@ export default function TimerDisplay() {
                 onChange={(e) => setCustomMin(e.target.value.replace(/\D/g, ""))}
                 className="w-14 bg-transparent text-center font-mono text-sm text-bone outline-none"
                 style={{ fontVariantNumeric: "tabular-nums" }}
+                aria-label="Custom minutes"
               />
               <span className="font-mono text-[10px] tracking-[0.2em] text-faint">
                 MIN
@@ -173,7 +230,7 @@ export default function TimerDisplay() {
 
           <div className="flex items-center gap-3">
             <ClickSpark
-              sparkColor="#f5a524"
+              sparkColor={isBreak ? "#67e8f9" : "#f5a524"}
               sparkCount={8}
               sparkRadius={20}
               sparkSize={7}
@@ -181,7 +238,9 @@ export default function TimerDisplay() {
             >
               <button
                 onClick={running ? pauseTimer : startTimer}
-                className="glass flex items-center gap-2 rounded-full px-7 py-2.5 font-mono text-[11px] tracking-[0.3em] text-bone transition-colors hover:border-white/25"
+                className={`glass flex items-center gap-2 rounded-full px-7 py-2.5 font-mono text-[11px] tracking-[0.3em] transition-colors hover:border-white/25 ${
+                  isBreak ? "text-cyan" : "text-bone"
+                }`}
               >
                 {running ? (
                   <>
@@ -189,7 +248,8 @@ export default function TimerDisplay() {
                   </>
                 ) : (
                   <>
-                    <Play className="h-3.5 w-3.5" strokeWidth={1.5} /> IGNITE
+                    <Play className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {isBreak ? "RESUME REST" : "IGNITE"}
                   </>
                 )}
               </button>
@@ -201,6 +261,15 @@ export default function TimerDisplay() {
             >
               <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.5} />
             </button>
+            {isBreak && (
+              <button
+                onClick={endBreak}
+                className="glass-soft flex items-center gap-2 rounded-full px-4 py-2.5 font-mono text-[10px] tracking-[0.2em] text-dim transition-colors hover:text-bone"
+              >
+                <Coffee className="h-3.5 w-3.5" strokeWidth={1.5} />
+                END REST
+              </button>
+            )}
           </div>
         </motion.div>
       </motion.div>

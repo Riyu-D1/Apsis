@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Radio, TriangleAlert } from "lucide-react";
-import { useMission } from "@/lib/store";
-import { fmtInt } from "@/lib/format";
+import { useClock, useMission } from "@/lib/store";
+import { fmtClock, fmtInt } from "@/lib/format";
 import ScrambleText from "./ScrambleText";
 import ShinyText from "@/components/reactbits/ShinyText";
 
@@ -109,6 +109,7 @@ function Telemetry() {
           ["DIAMETER", `${fmtInt(asteroid.diameterM)} M`],
           ["APPROACH", asteroid.approachUtc],
           ["CLASS", asteroid.hazardous ? "HAZARDOUS" : "SAFE", asteroid.hazardous ? "alert" : "cyan"],
+          ["ISS", `${nasa.iss.lat >= 0 ? "+" : ""}${nasa.iss.lat.toFixed(1)}° ${nasa.iss.lon >= 0 ? "+" : ""}${nasa.iss.lon.toFixed(1)}°`, nasa.sources.iss === "live" ? "cyan" : undefined],
         ]
       : mode === "apod"
         ? [
@@ -116,19 +117,12 @@ function Telemetry() {
             ["SOURCE", "APOD // GSFC", "cyan"],
             ["DATE", nasa.apod[apodIndex % nasa.apod.length]?.date ?? "—"],
           ]
-        : mode === "cupola"
-          ? [
-              ["LAT", `${nasa.iss.lat >= 0 ? "+" : ""}${nasa.iss.lat.toFixed(2)}°`],
-              ["LON", `${nasa.iss.lon >= 0 ? "+" : ""}${nasa.iss.lon.toFixed(2)}°`],
-              ["ALTITUDE", `${fmtInt(nasa.iss.altKm)} KM`],
-              ["VELOCITY", `${fmtInt(nasa.iss.velKmh)} KM/H`, nasa.sources.iss === "live" ? "cyan" : undefined],
-            ]
-          : [
-              ["KP INDEX", nasa.solar.kpIndex.toFixed(1)],
-              ["FLARE CLASS", nasa.solar.flareClass, nasa.solar.level === "STORM" ? "alert" : "cyan"],
-              ["SOLAR WIND", nasa.solar.windSpeedKms > 0 ? `${fmtInt(nasa.solar.windSpeedKms)} KM/S` : "QUIET"],
-              ["ACTIVITY", nasa.solar.level, nasa.solar.level === "STORM" ? "alert" : undefined],
-            ];
+        : [
+            ["KP INDEX", nasa.solar.kpIndex.toFixed(1)],
+            ["FLARE CLASS", nasa.solar.flareClass, nasa.solar.level === "STORM" ? "alert" : "cyan"],
+            ["SOLAR WIND", nasa.solar.windSpeedKms > 0 ? `${fmtInt(nasa.solar.windSpeedKms)} KM/S` : "QUIET"],
+            ["ACTIVITY", nasa.solar.level, nasa.solar.level === "STORM" ? "alert" : undefined],
+          ];
 
   return (
     <div className="flex flex-col gap-1.5 font-mono text-[11px] leading-relaxed">
@@ -153,19 +147,34 @@ function Telemetry() {
   );
 }
 
+/** Compact single-line telemetry shown on small screens. */
+function MobileStrip() {
+  const { mode, asteroid, nasa } = useMission();
+  const text =
+    mode === "asteroid"
+      ? `${asteroid.name} · ${fmtInt(asteroid.velocityKmh)} KM/H · MISS ${fmtInt(asteroid.missDistanceKm)} KM`
+      : mode === "apod"
+        ? "APOD // GSFC ARCHIVE"
+        : `KP ${nasa.solar.kpIndex.toFixed(1)} · ${nasa.solar.flareClass} · ${nasa.solar.level}`;
+  return (
+    <div className="absolute left-1/2 top-16 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] tracking-[0.2em] text-faint sm:hidden">
+      <ScrambleText text={text} />
+    </div>
+  );
+}
+
 export default function Hud() {
-  const { mode, zen, nasa, launched, remainingSec, durationSec, tasks } =
-    useMission();
+  const { mode, zen, nasa, launched, durationSec, tasks } = useMission();
+  const { remainingSec, phase } = useClock();
   const src =
     mode === "asteroid"
       ? nasa.sources.neows
       : mode === "apod"
         ? nasa.sources.apod
-        : mode === "cupola"
-          ? nasa.sources.epic
-          : nasa.sources.donki;
+        : nasa.sources.donki;
 
   const elapsed = durationSec - remainingSec;
+  const isBreak = phase !== "focus";
   const done = tasks.filter((t) => t.done).length;
 
   return (
@@ -217,11 +226,15 @@ export default function Hud() {
         ORBITAL CLASS — CIVILIAN GRADE
       </div>
 
+      {/* mobile — compact telemetry strip */}
+      <MobileStrip />
+
       {/* bottom-right — session meta */}
       <div className="absolute bottom-24 right-4 hidden flex-col items-end gap-1.5 font-mono text-[10px] tracking-[0.2em] text-faint sm:bottom-28 sm:right-6 sm:flex">
-        <div>
-          T+{String(Math.floor(elapsed / 60)).padStart(2, "0")}:
-          {String(elapsed % 60).padStart(2, "0")} ELAPSED
+        <div className={isBreak ? "text-cyan" : undefined}>
+          {isBreak
+            ? `REST T-${fmtClock(remainingSec)}`
+            : `T+${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")} ELAPSED`}
         </div>
         <div>
           WAYPOINTS {done}/{tasks.length}
