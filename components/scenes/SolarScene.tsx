@@ -53,71 +53,77 @@ float fbm(vec2 p) {
 
 void main() {
   vec2 p = (vUv - 0.5) * vec2(uRes.x / uRes.y, 1.0);
-  vec2 uv = p - vec2(-0.26, 0.0); // sun sits left-of-center
+  vec2 uv = p - vec2(-0.28, 0.02); // sun sits left-of-center
   float r = length(uv);
   float ang = atan(uv.y, uv.x);
   float t = uTime;
-  float R = 0.33;
+  float R = 0.40;
 
   /* --- deep space background: faint stars + warm dust --- */
-  vec3 col = vec3(0.012, 0.010, 0.016);
-  float st = hash(floor(p * 340.0));
-  col += vec3(0.9) * step(0.9975, st) * (0.25 + 0.3 * hash(floor(p * 340.0) + 3.0));
-  col += vec3(0.05, 0.03, 0.02) * fbm(p * 3.0 + 7.0) * 0.4;
+  vec3 col = vec3(0.010, 0.009, 0.014);
+  float st = hash(floor(p * 380.0));
+  col += vec3(0.85) * step(0.998, st) * (0.2 + 0.3 * hash(floor(p * 380.0) + 3.0));
+  col += vec3(0.06, 0.035, 0.018) * fbm(p * 2.6 + 7.0) * 0.35;
 
-  /* --- photosphere: limb-darkened disc w/ granulation --- */
+  /* --- photosphere: limb-darkened disc, high-contrast granulation --- */
   float mu = clamp(1.0 - (r / R) * (r / R), 0.0, 1.0);
-  float limb = sqrt(mu);
-  float gran = fbm(uv * 16.0 + vec2(t * 0.03, -t * 0.02));
-  gran = (gran + 0.5 * fbm(uv * 36.0 - vec2(t * 0.025, 0.0))) / 1.5;
-  float surface = limb * (0.68 + 0.6 * gran);
+  float limb = pow(sqrt(mu), 0.8);
+  float g1 = fbm(uv * 15.0 + vec2(t * 0.035, -t * 0.02));
+  float g2 = fbm(uv * 34.0 - vec2(t * 0.028, t * 0.015));
+  float gran = g1 * 0.65 + g2 * 0.35;
+  // dark inter-granular lanes -> reads as plasma cells, not blur
+  float cells = smoothstep(0.30, 0.75, gran);
+  float surface = limb * (0.30 + 0.95 * cells) + limb * 0.25;
 
-  vec3 cLimb = vec3(0.80, 0.21, 0.03);
-  vec3 cMid = vec3(1.00, 0.52, 0.08);
-  vec3 cCore = vec3(1.00, 0.86, 0.58);
-  vec3 sun = mix(cLimb, cMid, smoothstep(0.0, 0.5, surface));
-  sun = mix(sun, cCore, smoothstep(0.45, 1.0, surface));
-  sun = mix(sun, vec3(1.0, 0.97, 0.90), uStorm * 0.4 * smoothstep(0.3, 0.9, surface));
-  float disc = smoothstep(R, R - 0.012, r);
-  col += sun * disc * 1.45;
+  vec3 cLimb = vec3(0.72, 0.16, 0.02);
+  vec3 cMid = vec3(1.00, 0.47, 0.06);
+  vec3 cCore = vec3(1.00, 0.84, 0.50);
+  vec3 sun = mix(cLimb, cMid, smoothstep(0.15, 0.62, surface));
+  sun = mix(sun, cCore, smoothstep(0.60, 1.15, surface));
+  sun = mix(sun, vec3(1.0, 0.96, 0.88), uStorm * 0.3 * smoothstep(0.3, 1.0, surface));
+  float disc = smoothstep(R, R - 0.008, r);
+  col += sun * disc * 1.6;
 
-  /* --- chromosphere: thin noisy rim --- */
-  float rim = smoothstep(R - 0.018, R, r) * smoothstep(R + 0.024, R, r);
-  rim *= 0.7 + 0.5 * fbm(vec2(ang * 9.0, t * 0.35));
-  col += vec3(1.0, 0.42, 0.10) * rim;
+  /* --- chromosphere: thin spiculed rim --- */
+  float rim = smoothstep(R - 0.012, R + 0.002, r) * smoothstep(R + 0.03, R, r);
+  rim *= 0.6 + 0.6 * fbm(vec2(ang * 14.0, t * 0.4));
+  col += vec3(1.0, 0.38, 0.08) * rim * 1.2;
 
-  /* --- flare lobes: pulsing eruptions hugging the limb --- */
-  float fl = 0.0;
-  for (int i = 0; i < 4; i++) {
+  /* --- prominences: thin arcs lifting off the limb --- */
+  float prom = 0.0;
+  for (int i = 0; i < 3; i++) {
     float fi = float(i);
-    float a0 = hash(vec2(fi, 3.7)) * 6.2831 + t * (0.05 + 0.02 * fi);
-    float lobe = pow(0.5 + 0.5 * cos(ang - a0), 26.0);
-    float h = 0.04 + 0.10 * uStorm + 0.03 * sin(t * (0.6 + fi * 0.23) + fi * 2.0);
-    float rad = exp(-pow((r - R - h) * 26.0, 2.0));
-    float pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin(t * (0.8 + fi * 0.31) + fi * 5.0));
-    fl += lobe * rad * pulse;
+    float a0 = hash(vec2(fi, 5.1)) * 6.2831 + t * (0.03 + 0.015 * fi);
+    float lobe = pow(0.5 + 0.5 * cos(ang - a0), 7.0);
+    float h = 0.05 + 0.10 * uStorm + 0.025 * sin(t * (0.5 + fi * 0.2) + fi * 2.2);
+    float arc = exp(-pow((r - R - h) * 52.0, 2.0));
+    float pulse = 0.5 + 0.5 * sin(t * (0.7 + fi * 0.27) + fi * 4.0);
+    prom += lobe * arc * (0.35 + 0.65 * pulse);
   }
-  fl *= 0.3 + uStorm * 1.6;
-  col += fl * mix(vec3(1.0, 0.72, 0.30), vec3(1.0, 0.28, 0.16), uStorm) * 1.7;
+  prom *= 0.4 + uStorm * 1.2;
+  col += prom * mix(vec3(1.0, 0.62, 0.24), vec3(1.0, 0.24, 0.14), uStorm) * 1.5;
 
-  /* --- corona: radial streamers flowing outward --- */
-  float str = fbm(vec2(ang * 4.0, log(max(r, 0.001)) * 7.0 - t * (0.22 + uStorm * 0.5)));
-  float cor = pow(str, 2.2);
-  cor *= smoothstep(R - 0.06, R + 0.28, r);
-  cor *= exp(-(r - R) * (4.2 - 2.4 * uStorm));
-  col += cor * mix(vec3(1.0, 0.58, 0.16), vec3(1.0, 0.34, 0.12), uStorm) * 1.5;
-  col += vec3(1.0, 0.55, 0.14) * exp(-(r - R) * 7.0) * smoothstep(R - 0.01, R + 0.02, r) * 0.3;
+  /* --- corona: sparse long streamers flowing outward --- */
+  float laneA = ang * 6.0;
+  float str = fbm(vec2(laneA, log(max(r, 0.001)) * 6.0 - t * (0.18 + uStorm * 0.45)));
+  float cor = pow(str, 3.2) * smoothstep(0.45, 0.85, str) * 2.0;
+  cor *= smoothstep(R - 0.04, R + 0.30, r);
+  cor *= exp(-(r - R) * (2.4 - 1.3 * uStorm));
+  col += cor * mix(vec3(1.0, 0.55, 0.15), vec3(1.0, 0.32, 0.12), uStorm) * 1.6;
+  // inner corona glow
+  col += vec3(1.0, 0.52, 0.13) * exp(-(r - R) * 5.5) * smoothstep(R - 0.005, R + 0.02, r) * 0.4;
 
   /* --- solar wind: particle streaks racing outward --- */
-  float lane = floor((ang + 3.14159) / 6.2832 * 90.0);
+  float lane = floor((ang + 3.14159) / 6.2832 * 110.0);
   float laneHash = hash(vec2(lane, 11.0));
-  float w = (r - t * (0.10 + laneHash * 0.10 + uStorm * 0.22)) * 42.0;
-  vec2 cell = vec2(fract((ang + 3.14159) / 6.2832 * 90.0), fract(w));
+  float w = (r - t * (0.09 + laneHash * 0.11 + uStorm * 0.22)) * 46.0;
+  vec2 cell = vec2(fract((ang + 3.14159) / 6.2832 * 110.0), fract(w));
   float seed = hash(vec2(lane, floor(w)));
-  float dot2 = smoothstep(0.32, 0.0, length(cell - vec2(0.5))) * step(0.72, seed);
-  float windMask = smoothstep(R + 0.04, R + 0.35, r) * exp(-(r - R) * 1.35);
-  col += vec3(1.0, 0.72, 0.38) * dot2 * windMask * (0.35 + uStorm * 0.9);
+  float dot2 = smoothstep(0.3, 0.0, length(cell - vec2(0.5))) * step(0.68, seed);
+  float windMask = smoothstep(R + 0.05, R + 0.5, r) * exp(-(r - R) * 1.1);
+  col += vec3(1.0, 0.70, 0.35) * dot2 * windMask * (0.3 + uStorm * 0.8);
 
+  col *= 1.12;
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -301,12 +307,12 @@ export default function SolarScene() {
         <Sun />
         <EffectComposer>
           <Bloom
-            intensity={0.9}
-            luminanceThreshold={0.3}
-            luminanceSmoothing={0.35}
+            intensity={0.6}
+            luminanceThreshold={0.42}
+            luminanceSmoothing={0.25}
             mipmapBlur
           />
-          <Noise opacity={0.08} />
+          <Noise opacity={0.06} />
           <Vignette offset={0.2} darkness={0.78} />
         </EffectComposer>
       </Canvas>

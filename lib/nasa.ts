@@ -109,31 +109,51 @@ interface ApodEntry {
   media_type: string;
   url?: string;
   hdurl?: string;
+  thumbnail_url?: string;
   copyright?: string;
 }
+
+/** NASA serves placeholder/logo URLs for degraded entries — reject them. */
+const isRealImage = (url?: string) =>
+  !!url &&
+  /\.(jpe?g|png|gif|webp|tif?f)$/i.test(url.split("?")[0]) &&
+  !/nasa-logo|placeholder|nasa\.png/i.test(url);
 
 export async function getApod(): Promise<Result<ApodImage[]>> {
   try {
     const end = new Date();
     const start = new Date(Date.now() - 6 * DAY_MS);
     const json = await fetchJson(
-      `${API}/planetary/apod?api_key=${KEY}&start_date=${isoDay(start)}&end_date=${isoDay(end)}`,
+      `${API}/planetary/apod?api_key=${KEY}&start_date=${isoDay(start)}&end_date=${isoDay(end)}&thumbs=true`,
     );
     const arr = Array.isArray(json) ? (json as ApodEntry[]) : [json as ApodEntry];
 
-    const data: ApodImage[] = arr
-      .filter((a) => a?.media_type === "image" && a.url)
-      .map((a) => ({
+    const data: ApodImage[] = [];
+    const seen = new Set<string>();
+    for (const a of arr) {
+      const isVideo = a.media_type === "video";
+      const img = isVideo ? a.thumbnail_url : (a.hdurl ?? a.url);
+      const thumb = isVideo ? a.thumbnail_url : a.url;
+      if (!img || !isRealImage(img) || !a.title) continue;
+      if (seen.has(img)) continue;
+      seen.add(img);
+      data.push({
         date: a.date,
-        title: a.title,
+        title: a.title === "NASA Science" ? `APOD ${a.date}` : a.title,
         explanation: a.explanation ?? "",
-        url: a.url!,
-        hdurl: a.hdurl ?? a.url!,
-        credit: a.copyright ? a.copyright.replace(/\n/g, " ").trim() : "NASA / APOD",
-      }))
-      .reverse();
+        url: isRealImage(thumb) ? thumb! : img!,
+        hdurl: img!,
+        credit: a.copyright
+          ? a.copyright.replace(/\n/g, " ").trim()
+          : isVideo
+            ? "NASA / APOD (video still)"
+            : "NASA / APOD",
+      });
+    }
+    data.reverse();
 
-    if (!data.length) throw new Error("no images in range");
+    // all-placeholder feeds (CMS outages) fall back to the curated archive
+    if (data.length < 3) throw new Error("no real images in range");
     return { data, source: "live" };
   } catch {
     return { data: FALLBACK_APOD, source: "cache" };

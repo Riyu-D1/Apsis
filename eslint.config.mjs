@@ -14,6 +14,15 @@ const eslintConfig = defineConfig([
       "react-hooks/set-state-in-effect": "off",
     },
   },
+  {
+    // R3F scenes — mutating three.js objects inside useFrame is the
+    // idiomatic render-loop pattern, not a React violation.
+    files: ["components/scenes/**"],
+    rules: {
+      "react-hooks/immutability": "off",
+      "react-hooks/purity": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
