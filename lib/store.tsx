@@ -261,6 +261,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   const [selfId, setSelfId] = useState("");
 
   const roomRef = useRef<RoomHandle | null>(null);
+  const joiningRef = useRef(false);
   const clientId = useRef("");
   const joinedAtRef = useRef(0);
   const followRef = useRef(false);
@@ -532,6 +533,20 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!running) return;
     endsAt.current = Date.now() + latest.current.remainingSec * 1000;
+    // re-persist with the fresh endsAt — the effect above this one runs first
+    // in the same flush and would otherwise have written the stale ref value
+    if (hydrated.current)
+      localStorage.setItem(
+        "apsis.timer",
+        JSON.stringify({
+          endsAt: endsAt.current,
+          running: true,
+          remaining: latest.current.remainingSec,
+          phase,
+          cycle,
+          durationSec,
+        } satisfies PersistTimer),
+      );
     const iv = setInterval(() => {
       const left = Math.max(0, Math.round((endsAt.current - Date.now()) / 1000));
       setRemainingSec(left);
@@ -542,7 +557,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       }
     }, 250);
     return () => clearInterval(iv);
-  }, [running, phase, completePhase]);
+  }, [running, phase, cycle, durationSec, completePhase]);
 
   /* ------- countdown in the tab title ------- */
   useEffect(() => {
@@ -584,6 +599,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         setModeState(MODE_ORDER[digit - 1]);
       }
       if (e.key === " ") {
+        // let a focused button activate normally instead of toggling the timer
+        if (e.target instanceof HTMLButtonElement) return;
         e.preventDefault();
         if (!launched) return;
         missionAudio.click();
@@ -783,7 +800,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           ? BREAK_LONG
           : BREAK_SHORT;
     return {
-      callsign: l.callsign,
+      callsign: l.callsign || "CREW-00",
       phase: l.phase,
       running: l.running,
       zen: l.zen,
@@ -801,7 +818,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         pushEvent("info", "LINK OFFLINE — SUPABASE NOT CONFIGURED");
         return;
       }
-      if (roomRef.current) return;
+      if (roomRef.current || joiningRef.current) return;
+      joiningRef.current = true;
       const c = (code ?? genRoomCode()).toUpperCase().trim();
       setCrewStatus("connecting");
       setCrewCode(c);
@@ -853,6 +871,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           );
         },
       }).then((room) => {
+        joiningRef.current = false;
         if (!room) {
           setCrewCode(null);
           roomRef.current = null;
@@ -874,6 +893,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     missionAudio.click();
     const room = roomRef.current;
     roomRef.current = null;
+    joiningRef.current = false;
     void room?.leave();
     setCrew({});
     setCrewCode(null);

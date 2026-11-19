@@ -10,7 +10,7 @@ import ScrambleText from "./ScrambleText";
 
 const CHECKS = [
   "UPLINK // NASA OPEN API",
-  "TELEMETRY // NEOWS · APOD · EPIC · DONKI",
+  "TELEMETRY // NEOWS · APOD · DONKI · ISS",
   "AMBIENT SYNTH // PROCEDURAL BUS",
   "STARFIELD // RENDERER ARMED",
 ];

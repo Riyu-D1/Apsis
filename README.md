@@ -40,6 +40,9 @@ live ISS position every 20s.
 
 ```bash
 NASA_API_KEY=your_key   # optional — falls back to DEMO_KEY
+
+# canonical URL for OG image / sitemap — set in production
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
 ```
 
 ## Crew link (optional)

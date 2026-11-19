@@ -106,7 +106,7 @@ export default function FlightPlan() {
                   </span>
                   <button
                     onClick={() => removeTask(t.id)}
-                    className="shrink-0 text-faint opacity-0 transition-opacity hover:text-alert group-hover:opacity-100"
+                    className="shrink-0 text-faint transition-opacity hover:text-alert sm:opacity-0 sm:group-hover:opacity-100"
                     aria-label="Delete waypoint"
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
