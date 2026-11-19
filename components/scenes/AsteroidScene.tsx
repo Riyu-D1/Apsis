@@ -232,8 +232,8 @@ void main() {
   lit += vec3(1.0, 0.75, 0.42) * night * land * (1.0 - ice) * pop * dots * 0.9;
 
   // thin blue atmosphere rim, day side only
-  float fres = pow(1.0 - max(dot(N, V), 0.0), 3.2);
-  lit += vec3(0.3, 0.55, 1.0) * fres * day * 0.5;
+  float fres = pow(1.0 - max(dot(N, V), 0.0), 4.5);
+  lit += vec3(0.3, 0.55, 1.0) * fres * day * 0.22;
 
   gl_FragColor = vec4(lit, 1.0);
 }
@@ -273,8 +273,8 @@ const ATMO_FRAG = /* glsl */ `
 varying vec3 vNormal;
 varying vec3 vView;
 void main() {
-  float f = pow(max(0.0, 0.74 - dot(vNormal, vView)), 4.5);
-  gl_FragColor = vec4(vec3(0.3, 0.55, 1.0) * f * 1.1, f);
+  float f = pow(max(0.0, 0.78 - dot(vNormal, vView)), 6.0);
+  gl_FragColor = vec4(vec3(0.3, 0.55, 1.0) * f * 0.6, f * 0.7);
 }
 `;
 
@@ -315,7 +315,7 @@ function Earth({ position }: { position: THREE.Vector3 }) {
         <mesh scale={1.018} material={cloudMat}>
           <sphereGeometry args={[EARTH_R, 48, 48]} />
         </mesh>
-        <mesh scale={1.22}>
+        <mesh scale={1.14}>
           <sphereGeometry args={[EARTH_R, 48, 48]} />
           <shaderMaterial
             vertexShader={ATMO_VERT}
